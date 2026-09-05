@@ -1,0 +1,10 @@
+{
+  "description": "Streamline appointment booking and queue management for patients, medical staff, and admins with real-time updates, notifications, and bilingual support.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

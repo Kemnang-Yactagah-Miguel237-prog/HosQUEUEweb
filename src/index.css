@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-serif: 'DM Serif Display', Georgia, serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-navy: var(--navy);
+  --color-teal: var(--teal);
+  --radius: 0.25rem;
+}
+
+:root {
+  --background: #F1F5F9;
+  --foreground: #0B1628;
+  --card: #FFFFFF;
+  --card-foreground: #0B1628;
+  --primary: #00A693;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E8EDF5;
+  --secondary-foreground: #0B1628;
+  --muted: #E2E8F0;
+  --muted-foreground: #64748B;
+  --accent: #0B4F9E;
+  --accent-foreground: #FFFFFF;
+  --border: #CBD5E1;
+  --ring: #00A693;
+  --navy: #0B1628;
+  --teal: #00A693;
+}
+
+.dark {
+  --background: #0B1628;
+  --foreground: #E8EDF5;
+  --card: #132035;
+  --card-foreground: #E8EDF5;
+  --primary: #00C4AE;
+  --primary-foreground: #0B1628;
+  --secondary: #1E3050;
+  --secondary-foreground: #E8EDF5;
+  --muted: #1A2940;
+  --muted-foreground: #94A3B8;
+  --accent: #2D7DD2;
+  --accent-foreground: #FFFFFF;
+  --border: #1E3050;
+  --ring: #00C4AE;
+  --navy: #0B1628;
+  --teal: #00C4AE;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s;
+}
+
+*:hover {
+  scrollbar-color: var(--border) transparent;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+}
