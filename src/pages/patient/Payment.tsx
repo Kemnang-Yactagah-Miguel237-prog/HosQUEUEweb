@@ -69,7 +69,6 @@ export default function Payment() {
             setStep('choose');
           }
         } else if (queryStatus === 'SUCCESSFUL' || queryStatus === 'completed') {
-          // Re-vérifier l'état du ticket
           const updated = await api.tickets.getById(ticketId);
           if (updated && updated.status !== 'pending_payment') {
             setConfirmedTicket(updated);
@@ -100,7 +99,7 @@ export default function Payment() {
     };
   }, [ticket]);
 
-  // Redirection vers la page hébergée Campay
+  // Redirection vers le portail hébergé Campay
   const handleRedirectToCampay = async () => {
     if (!ticket || !user) return;
     setErrorMessage(null);
@@ -111,14 +110,13 @@ export default function Payment() {
       const res = await api.payments.createLink(ticket.id, returnUrl);
 
       if (res.link) {
-        // Redirection du navigateur vers l'espace de paiement Campay
         window.location.href = res.link;
       } else {
         throw new Error('Lien de paiement Campay introuvable');
       }
     } catch (err: any) {
       console.error('Erreur génération lien Campay:', err);
-      setErrorMessage(err.message || 'Erreur lors de la redirection vers Campay');
+      setErrorMessage(err.message || (lang === 'fr' ? 'Erreur lors de la redirection vers la plateforme de paiement.' : 'Error redirecting to payment gateway.'));
       setRedirecting(false);
     }
   };
@@ -138,7 +136,6 @@ export default function Payment() {
       setCampayRef(res.reference);
       setUssdCode(res.ussdCode || (provider === 'mtn' ? '*126#' : '#150#'));
 
-      // Démarrage du polling du statut de la transaction Campay
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
 
       let attempts = 0;
@@ -215,19 +212,6 @@ export default function Payment() {
         <h1 className="text-2xl font-serif">{t('paymentTitle')}</h1>
       </div>
 
-      {/* Sandbox Notice Banner */}
-      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl p-3.5 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5 shadow-xs">
-        <span className="text-base leading-none mt-0.5">🧪</span>
-        <div>
-          <strong className="font-semibold block">{lang === 'fr' ? 'Mode Sandbox Campay Activé' : 'Campay Sandbox Mode Active'}</strong>
-          <span className="text-amber-800/90 dark:text-amber-300/90 leading-snug block mt-0.5">
-            {lang === 'fr'
-              ? 'Même si le tarif du service est plus élevé, le prélèvement réel de test sur Campay est plafonné à 10 FCFA.'
-              : 'Even with higher service fees, the test charge on Campay sandbox is fixed at 10 XAF.'}
-          </span>
-        </div>
-      </div>
-
       {/* Amount card */}
       <div className="bg-[#1e293b] text-white border border-border rounded-xl p-5 shadow">
         <div className="flex items-center justify-between">
@@ -240,10 +224,6 @@ export default function Payment() {
             <p className="text-sm text-teal font-semibold">{t('XOF')}</p>
           </div>
         </div>
-        <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-white/70">
-          <span>{lang === 'fr' ? 'Montant prélevé en Sandbox :' : 'Sandbox test charge:'}</span>
-          <span className="font-mono font-bold text-amber-400">10 FCFA</span>
-        </div>
       </div>
 
       {errorMessage && (
@@ -255,16 +235,16 @@ export default function Payment() {
 
       {step === 'choose' && (
         <div className="space-y-4">
-          {/* Main action: Redirect to Campay */}
+          {/* Main action: Redirect to Campay portal */}
           <div className="p-4 bg-primary/5 border-2 border-primary/40 rounded-2xl space-y-3">
             <div className="flex items-center gap-2.5 text-primary font-semibold text-sm">
               <span className="text-lg">🔒</span>
-              <span>{lang === 'fr' ? 'Portail de Paiement Campay (Recommandé)' : 'Campay Payment Gateway (Recommended)'}</span>
+              <span>{lang === 'fr' ? 'Paiement Sécurisé Campay' : 'Secure Campay Payment'}</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               {lang === 'fr'
-                ? 'Vous serez redirigé vers l\'espace sécurisé Campay pour payer via MTN Mobile Money ou Orange Money en toute sécurité.'
-                : 'You will be securely redirected to Campay checkout to pay with MTN or Orange Money.'}
+                ? 'Réglez vos frais de consultation en toute sécurité via MTN Mobile Money ou Orange Money sur le portail sécurisé Campay.'
+                : 'Pay your consultation fees securely using MTN Mobile Money or Orange Money on the Campay portal.'}
             </p>
             <button
               onClick={handleRedirectToCampay}
@@ -273,11 +253,11 @@ export default function Payment() {
               {redirecting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>{lang === 'fr' ? 'Redirection vers Campay...' : 'Redirecting to Campay...'}</span>
+                  <span>{lang === 'fr' ? 'Redirection en cours...' : 'Redirecting...'}</span>
                 </>
               ) : (
                 <>
-                  <span>{lang === 'fr' ? 'Payer 10 FCFA sur Campay →' : 'Pay 10 XAF on Campay →'}</span>
+                  <span>{lang === 'fr' ? `Payer ${service.bookingFee.toLocaleString()} XOF avec Campay →` : `Pay ${service.bookingFee.toLocaleString()} XOF with Campay →`}</span>
                 </>
               )}
             </button>
@@ -285,7 +265,7 @@ export default function Payment() {
 
           <div className="relative flex py-1 items-center">
             <div className="flex-grow border-t border-border"></div>
-            <span className="flex-shrink mx-3 text-xs text-muted-foreground uppercase font-semibold">{lang === 'fr' ? 'Ou saisie directe' : 'Or direct entry'}</span>
+            <span className="flex-shrink mx-3 text-xs text-muted-foreground uppercase font-semibold">{lang === 'fr' ? 'Ou payer par prompt USSD' : 'Or pay by direct USSD prompt'}</span>
             <div className="flex-grow border-t border-border"></div>
           </div>
 
@@ -336,19 +316,19 @@ export default function Payment() {
           <div className="bg-muted/50 rounded-xl p-3.5 text-xs text-muted-foreground leading-relaxed border border-border/50 space-y-1">
             <div className="flex items-center gap-2 font-medium text-foreground">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-              <span>{lang === 'fr' ? 'Notification USSD Campay :' : 'Campay USSD prompt:'}</span>
+              <span>{lang === 'fr' ? 'Notification USSD Mobile Money :' : 'Mobile Money USSD prompt:'}</span>
             </div>
             <p>
               {lang === 'fr'
-                ? 'Une notification USSD de 10 FCFA apparaîtra sur votre téléphone. Composez votre code PIN secret Mobile Money pour confirmer.'
-                : 'A 10 XAF USSD push notification will prompt on your phone. Enter your secret PIN to confirm.'}
+                ? 'Une notification USSD apparaîtra sur votre téléphone. Composez votre code PIN secret pour confirmer le paiement.'
+                : 'A USSD push notification will prompt on your phone. Enter your secret PIN to confirm payment.'}
             </p>
           </div>
 
           <button type="submit"
             className="w-full py-3 font-semibold text-sm rounded-xl text-white shadow transition-opacity hover:opacity-90"
             style={{ background: provider === 'mtn' ? '#EAB308' : '#F97316' }}>
-            {provider === 'mtn' ? `${t('payWithMTN')} (10 FCFA)` : `${t('payWithOrange')} (10 FCFA)`}
+            {provider === 'mtn' ? t('payWithMTN') : t('payWithOrange')}
           </button>
           <button type="button" onClick={handleAbandon} className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl hover:bg-muted transition-colors">
             {t('abandonPayment')}
@@ -369,8 +349,8 @@ export default function Payment() {
             <h3 className="font-semibold text-foreground text-lg">{t('paymentProcessing')}</h3>
             <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
               {lang === 'fr'
-                ? `En attente de confirmation Campay (10 FCFA). Veuillez valider avec votre code PIN secret sur votre mobile.`
-                : `Awaiting Campay confirmation (10 XAF). Please approve with your secret PIN on your phone.`}
+                ? `En attente de confirmation Mobile Money. Veuillez valider avec votre code PIN secret sur votre mobile.`
+                : `Awaiting Mobile Money confirmation. Please approve with your secret PIN on your phone.`}
             </p>
           </div>
 
@@ -383,7 +363,7 @@ export default function Payment() {
 
           {campayRef && (
             <p className="text-[11px] font-mono text-muted-foreground">
-              Ref Campay: <span className="font-semibold">{campayRef}</span>
+              Ref: <span className="font-semibold">{campayRef}</span>
             </p>
           )}
 
