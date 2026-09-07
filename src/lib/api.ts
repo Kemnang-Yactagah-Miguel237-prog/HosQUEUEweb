@@ -197,12 +197,27 @@ export const api = {
 
   // Payments
   payments: {
+    createLink: (ticketId: string, redirectUrl?: string) =>
+      request<{
+        link: string;
+        reference: string;
+        effectiveAmount: number;
+        originalAmount: number;
+        environment: 'demo' | 'prod';
+        transaction: any;
+      }>('/payments/create-link', {
+        method: 'POST',
+        body: JSON.stringify({ ticketId, redirectUrl }),
+      }),
     initiate: (ticketId: string, phoneNumber: string, provider: string) =>
       request<{
         message: string;
         reference: string;
         ussdCode?: string;
         operator?: string;
+        effectiveAmount?: number;
+        originalAmount?: number;
+        environment?: 'demo' | 'prod';
         transaction: any;
       }>('/payments/initiate', {
         method: 'POST',

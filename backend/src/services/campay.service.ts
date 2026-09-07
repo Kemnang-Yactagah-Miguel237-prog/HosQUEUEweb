@@ -14,6 +14,20 @@ export interface CampayCollectResponse {
   ussdCode?: string;
   operator?: string;
   status: 'PENDING' | 'SUCCESSFUL' | 'FAILED';
+  effectiveAmount: number;
+}
+
+export interface CampayPaymentLinkRequest {
+  amount: number;
+  description: string;
+  externalReference: string;
+  redirectUrl?: string;
+}
+
+export interface CampayPaymentLinkResponse {
+  link: string;
+  reference: string;
+  effectiveAmount: number;
 }
 
 export interface CampayTransactionStatus {
@@ -33,6 +47,7 @@ export class CampayService {
   private baseUrl: string;
   private cachedToken: string | null = null;
   private tokenExpiresAt: number = 0;
+  private sandboxAmount: number = 10;
 
   constructor() {
     this.username = process.env.CAMPAY_USERNAME || '';
@@ -41,10 +56,27 @@ export class CampayService {
     this.baseUrl = this.environment === 'prod'
       ? 'https://www.campay.net/api'
       : 'https://demo.campay.net/api';
+    this.sandboxAmount = Number(process.env.CAMPAY_SANDBOX_AMOUNT || 10);
   }
 
   public isConfigured(): boolean {
     return Boolean(this.username && this.password);
+  }
+
+  public getEnvironment(): 'demo' | 'prod' {
+    return this.environment;
+  }
+
+  /**
+   * Calcule le montant effectif à débiter :
+   * En mode sandbox (demo), force le montant à 10 FCFA (ou CAMPAY_SANDBOX_AMOUNT)
+   * En mode production, utilise le montant réel du service.
+   */
+  public getEffectiveAmount(originalAmount: number): number {
+    if (this.environment === 'demo') {
+      return this.sandboxAmount; // 10 FCFA en mode bac à sable
+    }
+    return Math.max(1, Math.round(originalAmount));
   }
 
   /**
@@ -94,7 +126,6 @@ export class CampayService {
 
       const data = (await response.json()) as { token: string; expires_in?: number };
       this.cachedToken = data.token;
-      // Expire par défaut dans 1 heure (3600s) si non précisé
       const expiresIn = data.expires_in || 3600;
       this.tokenExpiresAt = now + expiresIn * 1000;
       return this.cachedToken;
@@ -105,21 +136,87 @@ export class CampayService {
   }
 
   /**
-   * Initialise un paiement Mobile Money (Push USSD vers le mobile du patient)
+   * Crée un lien de paiement pour rediriger l'utilisateur vers la passerelle hébergée Campay
+   */
+  public async getPaymentLink(params: CampayPaymentLinkRequest): Promise<CampayPaymentLinkResponse> {
+    const effectiveAmount = this.getEffectiveAmount(params.amount);
+    const token = await this.getAuthToken();
+
+    // Mode simulation si les clés ne sont pas renseignées
+    if (!token || !this.isConfigured()) {
+      console.warn(`⚠️ Campay non configuré. Mode simulation lien de paiement (Montant: ${effectiveAmount} XAF).`);
+      const mockRef = 'CAMPAY-SIM-' + Math.random().toString(36).slice(2, 9).toUpperCase();
+      const redirect = params.redirectUrl || '';
+      const separator = redirect.includes('?') ? '&' : '?';
+      const simLink = redirect ? `${redirect}${separator}campay_status=SUCCESSFUL&reference=${mockRef}` : '';
+      return {
+        link: simLink || `https://demo.campay.net/pay/${mockRef}`,
+        reference: mockRef,
+        effectiveAmount,
+      };
+    }
+
+    try {
+      const payload: Record<string, any> = {
+        amount: String(effectiveAmount),
+        currency: 'XAF',
+        description: params.description || 'Paiement Ticket HosQUEUE',
+        external_reference: params.externalReference,
+      };
+
+      if (params.redirectUrl) {
+        payload.redirect_url = params.redirectUrl;
+      }
+
+      const response = await fetch(`${this.baseUrl}/get_payment_link/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data: any = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.detail || 'Échec de la génération du lien de paiement Campay');
+      }
+
+      // Extraction de la référence à partir du lien si nécessaire
+      const linkParts = (data.link || '').split('/');
+      const refFromLink = linkParts[linkParts.length - 1] || linkParts[linkParts.length - 2];
+      const reference = data.reference || refFromLink || ('CAMPAY-' + Date.now());
+
+      return {
+        link: data.link,
+        reference,
+        effectiveAmount,
+      };
+    } catch (err: any) {
+      console.error('Erreur getPaymentLink Campay:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Initialise un paiement Mobile Money direct (Push USSD vers le mobile du patient)
    */
   public async collect(params: CampayCollectRequest): Promise<CampayCollectResponse> {
     const formattedPhone = this.formatPhoneNumber(params.phoneNumber);
+    const effectiveAmount = this.getEffectiveAmount(params.amount);
     const token = await this.getAuthToken();
 
     // Mode simulation / fallback si les clés ne sont pas configurées
     if (!token || !this.isConfigured()) {
-      console.warn('⚠️ Campay non configuré ou token indisponible. Mode simulation activé.');
+      console.warn(`⚠️ Campay non configuré. Mode simulation USSD activé (Montant: ${effectiveAmount} XAF).`);
       const mockRef = 'CAMPAY-SIM-' + Math.random().toString(36).slice(2, 9).toUpperCase();
       return {
         reference: mockRef,
         ussdCode: formattedPhone.startsWith('23767') || formattedPhone.startsWith('23768') || formattedPhone.startsWith('23765') ? '*126#' : '#150#',
         operator: formattedPhone.startsWith('23769') || formattedPhone.startsWith('237655') ? 'ORANGE' : 'MTN',
         status: 'PENDING',
+        effectiveAmount,
       };
     }
 
@@ -131,7 +228,7 @@ export class CampayService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: String(Math.round(params.amount)),
+          amount: String(effectiveAmount),
           currency: 'XAF',
           from: formattedPhone,
           description: params.description || 'Paiement Ticket HosQUEUE',
@@ -150,6 +247,7 @@ export class CampayService {
         ussdCode: data.ussd_code,
         operator: data.operator,
         status: 'PENDING',
+        effectiveAmount,
       };
     } catch (err: any) {
       console.error('Erreur collect Campay:', err);
@@ -166,7 +264,7 @@ export class CampayService {
       return {
         reference,
         status: 'SUCCESSFUL',
-        amount: 1000,
+        amount: this.sandboxAmount,
         currency: 'XAF',
         operator: 'MOBILE_MONEY',
       };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { useLang, useAuth } from '../../lib/store';
 import { api, subscribeWS } from '../../lib/api';
 import type { Ticket, Service } from '../../lib/db';
@@ -8,6 +8,7 @@ type Step = 'choose' | 'form' | 'processing' | 'success';
 
 export default function Payment() {
   const { ticketId } = useParams<{ ticketId: string }>();
+  const [searchParams] = useSearchParams();
   const { t, lang } = useLang();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -15,33 +16,71 @@ export default function Payment() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [service, setService] = useState<Service | null>(null);
   const [step, setStep] = useState<Step>('choose');
-  const [provider, setProvider] = useState<'mtn' | 'orange' | null>(null);
+  const [provider, setProvider] = useState<'mtn' | 'orange' | 'redirect' | null>(null);
   const [phone, setPhone] = useState('');
   const [confirmedTicket, setConfirmedTicket] = useState<Ticket | null>(null);
   const [campayRef, setCampayRef] = useState<string | null>(null);
   const [ussdCode, setUssdCode] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
   const pollTimerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!ticketId) return;
+
+    // Vérification du ticket
     api.tickets.getById(ticketId)
-      .then(tk => {
-        if (!tk || tk.status !== 'pending_payment') {
+      .then(async tk => {
+        if (!tk) {
           navigate('/patient');
           return;
         }
+
+        // Si le ticket est déjà validé
+        if (tk.status !== 'pending_payment') {
+          setTicket(tk);
+          setConfirmedTicket(tk);
+          setStep('success');
+          const svc = await api.services.getById(tk.serviceId);
+          if (svc) setService(svc);
+          return;
+        }
+
         setTicket(tk);
-        return api.services.getById(tk.serviceId);
-      })
-      .then(svc => {
+        const svc = await api.services.getById(tk.serviceId);
         if (svc) setService(svc);
+
+        // Si on revient d'une redirection Campay avec un statut ou une référence dans l'URL
+        const queryRef = searchParams.get('reference') || searchParams.get('campay_ref');
+        const queryStatus = searchParams.get('campay_status') || searchParams.get('status');
+
+        if (queryRef) {
+          setStep('processing');
+          try {
+            const res = await api.payments.checkStatus(queryRef);
+            if (res.status === 'SUCCESSFUL' && res.ticket) {
+              setConfirmedTicket(res.ticket);
+              setStep('success');
+            } else {
+              setStep('choose');
+            }
+          } catch {
+            setStep('choose');
+          }
+        } else if (queryStatus === 'SUCCESSFUL' || queryStatus === 'completed') {
+          // Re-vérifier l'état du ticket
+          const updated = await api.tickets.getById(ticketId);
+          if (updated && updated.status !== 'pending_payment') {
+            setConfirmedTicket(updated);
+            setStep('success');
+          }
+        }
       })
       .catch(() => {
         navigate('/patient');
       });
-  }, [ticketId, navigate]);
+  }, [ticketId, searchParams, navigate]);
 
   // WebSocket listener pour détection instantanée de la confirmation
   useEffect(() => {
@@ -61,9 +100,33 @@ export default function Payment() {
     };
   }, [ticket]);
 
+  // Redirection vers la page hébergée Campay
+  const handleRedirectToCampay = async () => {
+    if (!ticket || !user) return;
+    setErrorMessage(null);
+    setRedirecting(true);
+
+    try {
+      const returnUrl = `${window.location.origin}/patient/payment/${ticket.id}`;
+      const res = await api.payments.createLink(ticket.id, returnUrl);
+
+      if (res.link) {
+        // Redirection du navigateur vers l'espace de paiement Campay
+        window.location.href = res.link;
+      } else {
+        throw new Error('Lien de paiement Campay introuvable');
+      }
+    } catch (err: any) {
+      console.error('Erreur génération lien Campay:', err);
+      setErrorMessage(err.message || 'Erreur lors de la redirection vers Campay');
+      setRedirecting(false);
+    }
+  };
+
+  // Paiement direct Push USSD
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ticket || !user || !provider) return;
+    if (!ticket || !user || !provider || provider === 'redirect') return;
 
     setErrorMessage(null);
     setStep('processing');
@@ -152,44 +215,105 @@ export default function Payment() {
         <h1 className="text-2xl font-serif">{t('paymentTitle')}</h1>
       </div>
 
-      {/* Amount card */}
-      <div className="bg-[#1e293b] text-white border border-border rounded-xl p-5 flex items-center justify-between shadow">
+      {/* Sandbox Notice Banner */}
+      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl p-3.5 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5 shadow-xs">
+        <span className="text-base leading-none mt-0.5">🧪</span>
         <div>
-          <p className="text-xs text-white/60 uppercase tracking-wide font-semibold">{lang === 'fr' ? service.nameFr : service.nameEn}</p>
-          <p className="text-sm text-white/80 mt-0.5">{t('paymentAmount')}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-3xl font-mono font-bold text-white">{service.bookingFee.toLocaleString()}</p>
-          <p className="text-sm text-teal font-semibold">{t('XOF')}</p>
+          <strong className="font-semibold block">{lang === 'fr' ? 'Mode Sandbox Campay Activé' : 'Campay Sandbox Mode Active'}</strong>
+          <span className="text-amber-800/90 dark:text-amber-300/90 leading-snug block mt-0.5">
+            {lang === 'fr'
+              ? 'Même si le tarif du service est plus élevé, le prélèvement réel de test sur Campay est plafonné à 10 FCFA.'
+              : 'Even with higher service fees, the test charge on Campay sandbox is fixed at 10 XAF.'}
+          </span>
         </div>
       </div>
 
+      {/* Amount card */}
+      <div className="bg-[#1e293b] text-white border border-border rounded-xl p-5 shadow">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-white/60 uppercase tracking-wide font-semibold">{lang === 'fr' ? service.nameFr : service.nameEn}</p>
+            <p className="text-sm text-white/80 mt-0.5">{t('paymentAmount')}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-mono font-bold text-white">{service.bookingFee.toLocaleString()}</p>
+            <p className="text-sm text-teal font-semibold">{t('XOF')}</p>
+          </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-white/70">
+          <span>{lang === 'fr' ? 'Montant prélevé en Sandbox :' : 'Sandbox test charge:'}</span>
+          <span className="font-mono font-bold text-amber-400">10 FCFA</span>
+        </div>
+      </div>
+
+      {errorMessage && (
+        <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 dark:text-red-400 flex items-center gap-2.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span className="flex-1">{errorMessage}</span>
+        </div>
+      )}
+
       {step === 'choose' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{t('paymentProvider')}</p>
-            <span className="text-[11px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">Via Campay</span>
+        <div className="space-y-4">
+          {/* Main action: Redirect to Campay */}
+          <div className="p-4 bg-primary/5 border-2 border-primary/40 rounded-2xl space-y-3">
+            <div className="flex items-center gap-2.5 text-primary font-semibold text-sm">
+              <span className="text-lg">🔒</span>
+              <span>{lang === 'fr' ? 'Portail de Paiement Campay (Recommandé)' : 'Campay Payment Gateway (Recommended)'}</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {lang === 'fr'
+                ? 'Vous serez redirigé vers l\'espace sécurisé Campay pour payer via MTN Mobile Money ou Orange Money en toute sécurité.'
+                : 'You will be securely redirected to Campay checkout to pay with MTN or Orange Money.'}
+            </p>
+            <button
+              onClick={handleRedirectToCampay}
+              disabled={redirecting}
+              className="w-full py-3 bg-primary text-primary-foreground font-semibold text-sm rounded-xl shadow hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              {redirecting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>{lang === 'fr' ? 'Redirection vers Campay...' : 'Redirecting to Campay...'}</span>
+                </>
+              ) : (
+                <>
+                  <span>{lang === 'fr' ? 'Payer 10 FCFA sur Campay →' : 'Pay 10 XAF on Campay →'}</span>
+                </>
+              )}
+            </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {(['mtn', 'orange'] as const).map(p => (
-              <button key={p} onClick={() => { setProvider(p); setStep('form'); }}
-                className={`p-5 border-2 rounded-xl flex flex-col items-center gap-3 hover:border-primary/50 transition-all ${provider === p ? 'border-primary' : 'border-border'}`}>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow ${p === 'mtn' ? 'bg-yellow-500' : 'bg-orange-500'}`}>
-                  {p === 'mtn' ? 'MTN' : 'OM'}
-                </div>
-                <span className="text-sm font-semibold text-center leading-tight">
-                  {p === 'mtn' ? t('paymentMTN') : t('paymentOrange')}
-                </span>
-              </button>
-            ))}
+
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-border"></div>
+            <span className="flex-shrink mx-3 text-xs text-muted-foreground uppercase font-semibold">{lang === 'fr' ? 'Ou saisie directe' : 'Or direct entry'}</span>
+            <div className="flex-grow border-t border-border"></div>
           </div>
-          <button onClick={handleAbandon} className="w-full mt-2 py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl hover:bg-muted transition-colors">
+
+          {/* Alternative direct USSD prompt */}
+          <div className="space-y-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('paymentProvider')}</p>
+            <div className="grid grid-cols-2 gap-3">
+              {(['mtn', 'orange'] as const).map(p => (
+                <button key={p} onClick={() => { setProvider(p); setStep('form'); }}
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 hover:border-primary/50 transition-all ${provider === p ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow ${p === 'mtn' ? 'bg-yellow-500' : 'bg-orange-500'}`}>
+                    {p === 'mtn' ? 'MTN' : 'OM'}
+                  </div>
+                  <span className="text-xs font-semibold text-center leading-tight">
+                    {p === 'mtn' ? t('paymentMTN') : t('paymentOrange')}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={handleAbandon} className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl hover:bg-muted transition-colors">
             {t('abandonPayment')}
           </button>
         </div>
       )}
 
-      {step === 'form' && (
+      {step === 'form' && provider !== 'redirect' && (
         <form onSubmit={handlePay} className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${provider === 'mtn' ? 'bg-yellow-500' : 'bg-orange-500'}`}>
@@ -198,13 +322,6 @@ export default function Payment() {
             <span className="text-sm font-medium">{provider === 'mtn' ? t('paymentMTN') : t('paymentOrange')}</span>
             <button type="button" onClick={() => setStep('choose')} className="ml-auto text-xs text-primary hover:underline">{t('edit')}</button>
           </div>
-
-          {errorMessage && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{errorMessage}</span>
-            </div>
-          )}
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{t('paymentPhone')}</label>
@@ -219,19 +336,19 @@ export default function Payment() {
           <div className="bg-muted/50 rounded-xl p-3.5 text-xs text-muted-foreground leading-relaxed border border-border/50 space-y-1">
             <div className="flex items-center gap-2 font-medium text-foreground">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-              <span>{lang === 'fr' ? 'Procédure Campay Mobile Money :' : 'Campay Mobile Money process:'}</span>
+              <span>{lang === 'fr' ? 'Notification USSD Campay :' : 'Campay USSD prompt:'}</span>
             </div>
             <p>
               {lang === 'fr'
-                ? 'Une notification USSD apparaîtra automatiquement sur votre téléphone. Composez votre code PIN secret Mobile Money pour valider le paiement.'
-                : 'A USSD push notification will automatically prompt on your phone. Enter your secret PIN to confirm.'}
+                ? 'Une notification USSD de 10 FCFA apparaîtra sur votre téléphone. Composez votre code PIN secret Mobile Money pour confirmer.'
+                : 'A 10 XAF USSD push notification will prompt on your phone. Enter your secret PIN to confirm.'}
             </p>
           </div>
 
           <button type="submit"
             className="w-full py-3 font-semibold text-sm rounded-xl text-white shadow transition-opacity hover:opacity-90"
             style={{ background: provider === 'mtn' ? '#EAB308' : '#F97316' }}>
-            {provider === 'mtn' ? t('payWithMTN') : t('payWithOrange')}
+            {provider === 'mtn' ? `${t('payWithMTN')} (10 FCFA)` : `${t('payWithOrange')} (10 FCFA)`}
           </button>
           <button type="button" onClick={handleAbandon} className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl hover:bg-muted transition-colors">
             {t('abandonPayment')}
@@ -252,8 +369,8 @@ export default function Payment() {
             <h3 className="font-semibold text-foreground text-lg">{t('paymentProcessing')}</h3>
             <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
               {lang === 'fr'
-                ? `Une demande de débit a été envoyée au +237 ${phone}. Veuillez déverrouiller votre mobile et valider avec votre code secret.`
-                : `A payment request has been sent to +237 ${phone}. Please approve the prompt on your phone.`}
+                ? `En attente de confirmation Campay (10 FCFA). Veuillez valider avec votre code PIN secret sur votre mobile.`
+                : `Awaiting Campay confirmation (10 XAF). Please approve with your secret PIN on your phone.`}
             </p>
           </div>
 
@@ -266,16 +383,16 @@ export default function Payment() {
 
           {campayRef && (
             <p className="text-[11px] font-mono text-muted-foreground">
-              Ref: <span className="font-semibold">{campayRef}</span>
+              Ref Campay: <span className="font-semibold">{campayRef}</span>
             </p>
           )}
 
           <div className="pt-2 flex flex-col gap-2">
             <button onClick={handleManualCheck}
-              className="w-full py-2.5 text-xs font-semibold bg-muted hover:bg-muted/80 rounded-xl transition-colors">
+              className="w-full py-2.5 text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors">
               {lang === 'fr' ? 'J\'ai déjà validé sur mon téléphone' : 'I already approved on my phone'}
             </button>
-            <button onClick={() => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); setStep('form'); }}
+            <button onClick={() => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); setStep('choose'); }}
               className="text-xs text-muted-foreground hover:underline">
               {t('cancel')}
             </button>

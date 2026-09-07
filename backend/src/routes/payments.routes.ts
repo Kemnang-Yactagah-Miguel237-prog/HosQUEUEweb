@@ -6,7 +6,65 @@ import { campayService } from '../services/campay.service.js';
 
 export const paymentsRouter = Router();
 
-// POST /api/payments/initiate
+// POST /api/payments/create-link (Redirection vers le portail de paiement Campay)
+paymentsRouter.post('/create-link', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { ticketId, redirectUrl } = req.body;
+
+    if (!ticketId) {
+      res.status(400).json({ error: 'ticketId est requis' });
+      return;
+    }
+
+    const ticket = db.getTicketById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket non trouvé' });
+      return;
+    }
+
+    if (ticket.patientId !== req.user?.id && req.user?.role !== 'admin') {
+      res.status(403).json({ error: 'Vous ne pouvez payer que votre propre ticket.' });
+      return;
+    }
+
+    const service = db.getServiceById(ticket.serviceId);
+    const originalAmount = service?.bookingFee || 1000;
+    const effectiveAmount = campayService.getEffectiveAmount(originalAmount);
+
+    const paymentLinkResult = await campayService.getPaymentLink({
+      amount: originalAmount,
+      description: `Ticket ${ticket.number} - ${service?.nameFr || 'HosQUEUE'}`,
+      externalReference: ticket.id,
+      redirectUrl: redirectUrl || undefined,
+    });
+
+    // Enregistrement de la transaction en attente
+    const transaction = db.recordPayment({
+      ticketId,
+      patientId: req.user?.id || ticket.patientId,
+      serviceId: ticket.serviceId,
+      amount: effectiveAmount,
+      phoneNumber: '',
+      provider: 'mtn_momo',
+      reference: paymentLinkResult.reference,
+      status: 'pending'
+    });
+
+    res.json({
+      link: paymentLinkResult.link,
+      reference: paymentLinkResult.reference,
+      effectiveAmount: paymentLinkResult.effectiveAmount,
+      originalAmount,
+      environment: campayService.getEnvironment(),
+      transaction
+    });
+  } catch (err: any) {
+    console.error('Erreur create payment link:', err);
+    res.status(500).json({ error: err.message || 'Erreur lors de la génération du lien de paiement Campay' });
+  }
+});
+
+// POST /api/payments/initiate (Push USSD direct)
 paymentsRouter.post('/initiate', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { ticketId, phoneNumber, provider } = req.body;
@@ -28,11 +86,11 @@ paymentsRouter.post('/initiate', authenticate, async (req: AuthenticatedRequest,
     }
 
     const service = db.getServiceById(ticket.serviceId);
-    const amount = service?.bookingFee || 1000;
+    const originalAmount = service?.bookingFee || 1000;
 
     // Déclenchement de la collecte Campay (Push USSD sur le téléphone)
     const campayResult = await campayService.collect({
-      amount,
+      amount: originalAmount,
       phoneNumber,
       description: `Frais réservation ticket ${ticket.number} (${service?.nameFr || 'HosQUEUE'})`,
       externalReference: ticket.id,
@@ -42,7 +100,7 @@ paymentsRouter.post('/initiate', authenticate, async (req: AuthenticatedRequest,
       ticketId,
       patientId: req.user?.id || ticket.patientId,
       serviceId: ticket.serviceId,
-      amount,
+      amount: campayResult.effectiveAmount,
       phoneNumber: campayService.formatPhoneNumber(phoneNumber),
       provider,
       reference: campayResult.reference,
@@ -54,6 +112,9 @@ paymentsRouter.post('/initiate', authenticate, async (req: AuthenticatedRequest,
       reference: campayResult.reference,
       ussdCode: campayResult.ussdCode,
       operator: campayResult.operator,
+      effectiveAmount: campayResult.effectiveAmount,
+      originalAmount,
+      environment: campayService.getEnvironment(),
       transaction
     });
   } catch (err: any) {
@@ -216,7 +277,7 @@ paymentsRouter.post('/:ticketId/confirm', authenticate, (req: AuthenticatedReque
       ticketId,
       patientId: ticket.patientId,
       serviceId: ticket.serviceId,
-      amount: service?.bookingFee || 1000,
+      amount: campayService.getEffectiveAmount(service?.bookingFee || 1000),
       phoneNumber,
       provider,
       reference: ref,
