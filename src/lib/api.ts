@@ -198,12 +198,25 @@ export const api = {
   // Payments
   payments: {
     initiate: (ticketId: string, phoneNumber: string, provider: string) =>
-      request<{ message: string; transaction: any }>('/payments/initiate', {
+      request<{
+        message: string;
+        reference: string;
+        ussdCode?: string;
+        operator?: string;
+        transaction: any;
+      }>('/payments/initiate', {
         method: 'POST',
         body: JSON.stringify({ ticketId, phoneNumber, provider }),
       }),
     status: (ticketId: string) =>
       request<{ status: 'pending' | 'success' | 'failed'; reference: string }>(`/payments/${ticketId}/status`),
+    checkStatus: (reference: string) =>
+      request<{
+        status: 'SUCCESSFUL' | 'PENDING' | 'FAILED';
+        ticket?: Ticket;
+        paymentRef?: string;
+        message?: string;
+      }>(`/payments/status/${reference}`),
     confirm: (ticketId: string, paymentRef?: string, phoneNumber?: string, provider?: string) =>
       request<{ ticket: Ticket; paymentRef: string }>(`/payments/${ticketId}/confirm`, {
         method: 'POST',

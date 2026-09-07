@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useLang, useAuth } from '../../lib/store';
-import { api } from '../../lib/api';
+import { api, subscribeWS } from '../../lib/api';
 import type { Ticket, Service } from '../../lib/db';
 
 type Step = 'choose' | 'form' | 'processing' | 'success';
@@ -18,6 +18,11 @@ export default function Payment() {
   const [provider, setProvider] = useState<'mtn' | 'orange' | null>(null);
   const [phone, setPhone] = useState('');
   const [confirmedTicket, setConfirmedTicket] = useState<Ticket | null>(null);
+  const [campayRef, setCampayRef] = useState<string | null>(null);
+  const [ussdCode, setUssdCode] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const pollTimerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!ticketId) return;
@@ -38,39 +43,92 @@ export default function Payment() {
       });
   }, [ticketId, navigate]);
 
+  // WebSocket listener pour détection instantanée de la confirmation
+  useEffect(() => {
+    const unsubscribe = subscribeWS((msg) => {
+      if (msg.type === 'PAYMENT_CONFIRMED' && msg.payload?.ticket) {
+        if (ticket && msg.payload.ticket.id === ticket.id) {
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          setConfirmedTicket(msg.payload.ticket);
+          setStep('success');
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, [ticket]);
+
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ticket || !user || !provider) return;
 
+    setErrorMessage(null);
     setStep('processing');
+
     try {
       const providerKey = provider === 'mtn' ? 'mtn_momo' : 'orange_money';
-      await api.payments.initiate(ticket.id, phone, providerKey);
+      const res = await api.payments.initiate(ticket.id, phone, providerKey);
 
-      const startedAt = Date.now();
-      const checkStatus = async (): Promise<void> => {
-        const payment = await api.payments.status(ticket.id);
-        if (payment.status === 'success') {
-          const res = await api.payments.confirm(ticket.id, payment.reference);
-          setConfirmedTicket(res.ticket);
-          setStep('success');
-          return;
-        }
-        if (payment.status === 'failed' || Date.now() - startedAt >= 120000) {
-          setStep('form');
-          return;
-        }
-        window.setTimeout(() => { void checkStatus(); }, 3000);
-      };
+      setCampayRef(res.reference);
+      setUssdCode(res.ussdCode || (provider === 'mtn' ? '*126#' : '#150#'));
 
-      await checkStatus();
-    } catch (err) {
-      console.error('Payment failed', err);
+      // Démarrage du polling du statut de la transaction Campay
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+
+      let attempts = 0;
+      const maxAttempts = 60; // 60 * 2.5s = 2.5 minutes max
+
+      pollTimerRef.current = setInterval(async () => {
+        attempts++;
+        try {
+          const statusRes = await api.payments.checkStatus(res.reference);
+
+          if (statusRes.status === 'SUCCESSFUL') {
+            clearInterval(pollTimerRef.current);
+            if (statusRes.ticket) {
+              setConfirmedTicket(statusRes.ticket);
+            }
+            setStep('success');
+          } else if (statusRes.status === 'FAILED') {
+            clearInterval(pollTimerRef.current);
+            setErrorMessage(statusRes.message || (lang === 'fr' ? 'Paiement échoué ou annulé.' : 'Payment failed or cancelled.'));
+            setStep('form');
+          } else if (attempts >= maxAttempts) {
+            clearInterval(pollTimerRef.current);
+            setErrorMessage(lang === 'fr' ? 'Délai d\'attente dépassé. Veuillez réessayer.' : 'Payment timeout. Please try again.');
+            setStep('form');
+          }
+        } catch (err: any) {
+          console.error('Erreur vérification statut:', err);
+        }
+      }, 2500);
+
+    } catch (err: any) {
+      console.error('Erreur initialisation paiement Campay:', err);
+      setErrorMessage(err.message || (lang === 'fr' ? 'Erreur lors de l\'initialisation du paiement.' : 'Error initiating payment.'));
       setStep('form');
     }
   };
 
+  const handleManualCheck = async () => {
+    if (!campayRef) return;
+    try {
+      const statusRes = await api.payments.checkStatus(campayRef);
+      if (statusRes.status === 'SUCCESSFUL') {
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        if (statusRes.ticket) setConfirmedTicket(statusRes.ticket);
+        setStep('success');
+      }
+    } catch (err) {
+      console.error('Erreur vérification manuelle:', err);
+    }
+  };
+
   const handleAbandon = async () => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     if (ticket) {
       try {
         await api.tickets.cancel(ticket.id);
@@ -95,7 +153,7 @@ export default function Payment() {
       </div>
 
       {/* Amount card */}
-      <div className="bg-[#1e293b] text-white border border-border rounded p-5 flex items-center justify-between shadow">
+      <div className="bg-[#1e293b] text-white border border-border rounded-xl p-5 flex items-center justify-between shadow">
         <div>
           <p className="text-xs text-white/60 uppercase tracking-wide font-semibold">{lang === 'fr' ? service.nameFr : service.nameEn}</p>
           <p className="text-sm text-white/80 mt-0.5">{t('paymentAmount')}</p>
@@ -108,7 +166,10 @@ export default function Payment() {
 
       {step === 'choose' && (
         <div className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{t('paymentProvider')}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{t('paymentProvider')}</p>
+            <span className="text-[11px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">Via Campay</span>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             {(['mtn', 'orange'] as const).map(p => (
               <button key={p} onClick={() => { setProvider(p); setStep('form'); }}
@@ -122,7 +183,7 @@ export default function Payment() {
               </button>
             ))}
           </div>
-          <button onClick={handleAbandon} className="w-full mt-2 py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded hover:bg-muted transition-colors">
+          <button onClick={handleAbandon} className="w-full mt-2 py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl hover:bg-muted transition-colors">
             {t('abandonPayment')}
           </button>
         </div>
@@ -130,7 +191,7 @@ export default function Payment() {
 
       {step === 'form' && (
         <form onSubmit={handlePay} className="space-y-4">
-          <div className="flex items-center gap-3 p-3 bg-muted rounded">
+          <div className="flex items-center gap-3 p-3 bg-muted rounded-xl">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${provider === 'mtn' ? 'bg-yellow-500' : 'bg-orange-500'}`}>
               {provider === 'mtn' ? 'M' : 'O'}
             </div>
@@ -138,17 +199,33 @@ export default function Payment() {
             <button type="button" onClick={() => setStep('choose')} className="ml-auto text-xs text-primary hover:underline">{t('edit')}</button>
           </div>
 
+          {errorMessage && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{t('paymentPhone')}</label>
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
-              placeholder={provider === 'mtn' ? '6XX XXX XXX' : '5XX XXX XXX'}
-              className="w-full px-3 py-2.5 bg-card border border-border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" />
+            <div className="relative flex items-center">
+              <span className="absolute left-3 text-sm font-mono text-muted-foreground font-semibold">+237</span>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
+                placeholder="6XX XXX XXX"
+                className="w-full pl-14 pr-3 py-2.5 bg-card border border-border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" />
+            </div>
           </div>
 
-          <div className="bg-muted/50 rounded p-3 text-xs text-muted-foreground leading-relaxed">
-            {lang === 'fr'
-              ? 'Vous allez recevoir une demande de confirmation sur votre téléphone. Validez le paiement dans votre application Mobile Money.'
-              : 'You will receive a confirmation request on your phone. Confirm the payment in your Mobile Money app.'}
+          <div className="bg-muted/50 rounded-xl p-3.5 text-xs text-muted-foreground leading-relaxed border border-border/50 space-y-1">
+            <div className="flex items-center gap-2 font-medium text-foreground">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              <span>{lang === 'fr' ? 'Procédure Campay Mobile Money :' : 'Campay Mobile Money process:'}</span>
+            </div>
+            <p>
+              {lang === 'fr'
+                ? 'Une notification USSD apparaîtra automatiquement sur votre téléphone. Composez votre code PIN secret Mobile Money pour valider le paiement.'
+                : 'A USSD push notification will automatically prompt on your phone. Enter your secret PIN to confirm.'}
+            </p>
           </div>
 
           <button type="submit"
@@ -156,19 +233,53 @@ export default function Payment() {
             style={{ background: provider === 'mtn' ? '#EAB308' : '#F97316' }}>
             {provider === 'mtn' ? t('payWithMTN') : t('payWithOrange')}
           </button>
-          <button type="button" onClick={handleAbandon} className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded hover:bg-muted transition-colors">
+          <button type="button" onClick={handleAbandon} className="w-full py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl hover:bg-muted transition-colors">
             {t('abandonPayment')}
           </button>
         </form>
       )}
 
       {step === 'processing' && (
-        <div className="text-center py-12 space-y-4">
-          <div className="mx-auto w-14 h-14 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm font-medium">{t('paymentProcessing')}</p>
-          <p className="text-xs text-muted-foreground">{lang === 'fr'
-            ? 'Confirmez la demande sur votre téléphone. Votre ticket ne sera ajouté à la file qu’après confirmation.'
-            : 'Confirm the payment request on your phone. Your ticket will join the queue only after confirmation.'}</p>
+        <div className="text-center py-8 space-y-5 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="relative mx-auto w-16 h-16">
+            <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center text-primary font-mono text-xs font-bold">
+              📱
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="font-semibold text-foreground text-lg">{t('paymentProcessing')}</h3>
+            <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
+              {lang === 'fr'
+                ? `Une demande de débit a été envoyée au +237 ${phone}. Veuillez déverrouiller votre mobile et valider avec votre code secret.`
+                : `A payment request has been sent to +237 ${phone}. Please approve the prompt on your phone.`}
+            </p>
+          </div>
+
+          {ussdCode && (
+            <div className="bg-muted/60 p-3 rounded-xl text-xs font-mono text-foreground border border-border/60">
+              <span className="text-muted-foreground">{lang === 'fr' ? 'Si vous ne recevez pas de prompt :' : 'If prompt does not appear:'} </span>
+              <strong className="text-primary">{ussdCode}</strong>
+            </div>
+          )}
+
+          {campayRef && (
+            <p className="text-[11px] font-mono text-muted-foreground">
+              Ref: <span className="font-semibold">{campayRef}</span>
+            </p>
+          )}
+
+          <div className="pt-2 flex flex-col gap-2">
+            <button onClick={handleManualCheck}
+              className="w-full py-2.5 text-xs font-semibold bg-muted hover:bg-muted/80 rounded-xl transition-colors">
+              {lang === 'fr' ? 'J\'ai déjà validé sur mon téléphone' : 'I already approved on my phone'}
+            </button>
+            <button onClick={() => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); setStep('form'); }}
+              className="text-xs text-muted-foreground hover:underline">
+              {t('cancel')}
+            </button>
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
-import type { User, Service, Ticket, Notification, ActivityEntry, PaymentTransaction, Role, TicketStatus, NotifType } from './types.js';
+import type { User, Service, Ticket, Notification, ActivityEntry, PaymentTransaction, Role, TicketStatus, NotifType, PaymentStatus } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -449,6 +449,18 @@ class Database {
     return this.data.payments
       .filter(payment => payment.ticketId === ticketId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
+  }
+
+  public getPaymentByReference(reference: string): PaymentTransaction | undefined {
+    return this.data.payments.find(p => p.reference === reference);
+  }
+
+  public updatePaymentStatus(reference: string, status: PaymentStatus): PaymentTransaction | null {
+    const idx = this.data.payments.findIndex(p => p.reference === reference);
+    if (idx === -1) return null;
+    this.data.payments[idx].status = status;
+    this.persist();
+    return this.data.payments[idx];
   }
 }
 

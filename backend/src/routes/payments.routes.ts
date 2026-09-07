@@ -2,75 +2,201 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { wsManager } from '../services/websocket.js';
+import { campayService } from '../services/campay.service.js';
 
 export const paymentsRouter = Router();
 
 // POST /api/payments/initiate
-paymentsRouter.post('/initiate', authenticate, (req: AuthenticatedRequest, res) => {
-  const { ticketId, phoneNumber, provider } = req.body;
+paymentsRouter.post('/initiate', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { ticketId, phoneNumber, provider } = req.body;
 
-  if (!ticketId || !phoneNumber || !provider) {
-    res.status(400).json({ error: 'ticketId, phoneNumber et provider sont requis' });
-    return;
+    if (!ticketId || !phoneNumber || !provider) {
+      res.status(400).json({ error: 'ticketId, phoneNumber et provider sont requis' });
+      return;
+    }
+
+    const ticket = db.getTicketById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket non trouvé' });
+      return;
+    }
+
+    if (ticket.patientId !== req.user?.id && req.user?.role !== 'admin') {
+      res.status(403).json({ error: 'Vous ne pouvez initier le paiement que pour votre propre ticket.' });
+      return;
+    }
+
+    const service = db.getServiceById(ticket.serviceId);
+    const amount = service?.bookingFee || 1000;
+
+    // Déclenchement de la collecte Campay (Push USSD sur le téléphone)
+    const campayResult = await campayService.collect({
+      amount,
+      phoneNumber,
+      description: `Frais réservation ticket ${ticket.number} (${service?.nameFr || 'HosQUEUE'})`,
+      externalReference: ticket.id,
+    });
+
+    const transaction = db.recordPayment({
+      ticketId,
+      patientId: req.user?.id || ticket.patientId,
+      serviceId: ticket.serviceId,
+      amount,
+      phoneNumber: campayService.formatPhoneNumber(phoneNumber),
+      provider,
+      reference: campayResult.reference,
+      status: 'pending'
+    });
+
+    res.json({
+      message: 'Demande de paiement Campay initialisée. Veuillez valider le prompt USSD sur votre mobile.',
+      reference: campayResult.reference,
+      ussdCode: campayResult.ussdCode,
+      operator: campayResult.operator,
+      transaction
+    });
+  } catch (err: any) {
+    console.error('Erreur initiate payment:', err);
+    res.status(500).json({ error: err.message || 'Erreur lors de l\'initialisation du paiement Campay' });
   }
-
-  const ticket = db.getTicketById(ticketId);
-  if (!ticket) {
-    res.status(404).json({ error: 'Ticket non trouvé' });
-    return;
-  }
-
-  if (ticket.patientId !== req.user?.id) {
-    res.status(403).json({ error: 'Vous ne pouvez payer que votre propre ticket.' });
-    return;
-  }
-
-  const service = db.getServiceById(ticket.serviceId);
-  const amount = service?.bookingFee || 1000;
-
-  const ref = 'MM-' + Math.random().toString(36).slice(2, 8).toUpperCase();
-
-  const transaction = db.recordPayment({
-    ticketId,
-    patientId: req.user?.id || ticket.patientId,
-    serviceId: ticket.serviceId,
-    amount,
-    phoneNumber,
-    provider,
-    reference: ref,
-    status: 'pending'
-  });
-
-  res.json({
-    message: 'Demande de paiement initialisée. Veuillez valider le prompt sur votre mobile.',
-    transaction
-  });
 });
 
 // GET /api/payments/:ticketId/status
-paymentsRouter.get('/:ticketId/status', authenticate, (req: AuthenticatedRequest, res) => {
-  const ticketId = String(req.params.ticketId);
-  const ticket = db.getTicketById(ticketId);
-  if (!ticket) {
-    res.status(404).json({ error: 'Ticket non trouvé' });
-    return;
-  }
+paymentsRouter.get('/:ticketId/status', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const ticketId = String(req.params.ticketId);
+    const ticket = db.getTicketById(ticketId);
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket non trouvé' });
+      return;
+    }
 
-  if (ticket.patientId !== req.user?.id) {
-    res.status(403).json({ error: 'Accès non autorisé.' });
-    return;
-  }
+    if (ticket.patientId !== req.user?.id && req.user?.role !== 'admin') {
+      res.status(403).json({ error: 'Accès non autorisé.' });
+      return;
+    }
 
-  const transaction = db.getLatestPaymentForTicket(ticketId);
-  if (!transaction) {
-    res.status(404).json({ error: 'Aucun paiement trouvé pour ce ticket.' });
-    return;
-  }
+    const transaction = db.getLatestPaymentForTicket(ticketId);
+    if (!transaction) {
+      res.status(404).json({ error: 'Aucun paiement trouvé pour ce ticket.' });
+      return;
+    }
 
-  res.json({ status: transaction.status, reference: transaction.reference });
+    res.json({ status: transaction.status, reference: transaction.reference });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erreur statut paiement' });
+  }
 });
 
-// POST /api/payments/:ticketId/confirm
+// GET /api/payments/status/:reference
+paymentsRouter.get('/status/:reference', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const reference = String(req.params.reference);
+    const payment = db.getPaymentByReference(reference);
+
+    if (!payment) {
+      res.status(404).json({ error: 'Transaction non trouvée' });
+      return;
+    }
+
+    // Si déjà validé dans notre DB
+    if (payment.status === 'success') {
+      const ticket = db.getTicketById(payment.ticketId);
+      res.json({
+        status: 'SUCCESSFUL',
+        ticket,
+        paymentRef: reference,
+      });
+      return;
+    }
+
+    // Vérification auprès de l'API Campay
+    const campayStatus = await campayService.checkTransactionStatus(reference);
+
+    if (campayStatus.status === 'SUCCESSFUL') {
+      const ticket = db.getTicketById(payment.ticketId);
+      if (ticket && ticket.status === 'pending_payment') {
+        const updatedTicket = db.confirmPayment(ticket.id, reference);
+        db.updatePaymentStatus(reference, 'success');
+
+        if (req.user) {
+          db.logActivity(req.user.id, req.user.name, `Paiement Campay validé (${reference}) pour le ticket ${ticket.number}`, ticket.id);
+        }
+
+        const notif = db.createNotification(
+          ticket.patientId,
+          `Paiement validé (${reference}). Votre ticket ${ticket.number} est maintenant dans la file d'attente.`,
+          `Payment confirmed (${reference}). Your ticket ${ticket.number} is now in the active queue.`,
+          'payment_confirmed'
+        );
+
+        wsManager.broadcast('PAYMENT_CONFIRMED', { ticket: updatedTicket, notification: notif });
+        wsManager.broadcast('QUEUE_UPDATED', { serviceId: ticket.serviceId });
+
+        res.json({
+          status: 'SUCCESSFUL',
+          ticket: updatedTicket,
+          paymentRef: reference
+        });
+        return;
+      }
+    } else if (campayStatus.status === 'FAILED') {
+      db.updatePaymentStatus(reference, 'failed');
+      res.json({
+        status: 'FAILED',
+        message: 'Le paiement a échoué ou a été annulé par l\'utilisateur.'
+      });
+      return;
+    }
+
+    res.json({
+      status: 'PENDING',
+      message: 'En attente de validation sur votre téléphone.'
+    });
+  } catch (err: any) {
+    console.error('Erreur check payment status:', err);
+    res.status(500).json({ error: err.message || 'Erreur lors de la vérification du statut Campay' });
+  }
+});
+
+// POST /api/payments/webhook/campay (Appelé automatiquement par Campay lors du succès d'un paiement)
+paymentsRouter.post('/webhook/campay', async (req, res) => {
+  try {
+    const { reference, status, external_reference } = req.body;
+    console.log(`🔔 Webhook Campay reçu pour la référence ${reference}, statut: ${status}`);
+
+    if (status === 'SUCCESSFUL') {
+      const payment = db.getPaymentByReference(reference);
+      const ticketId = external_reference || payment?.ticketId;
+
+      if (ticketId) {
+        const ticket = db.getTicketById(ticketId);
+        if (ticket && ticket.status === 'pending_payment') {
+          const updatedTicket = db.confirmPayment(ticket.id, reference);
+          db.updatePaymentStatus(reference, 'success');
+
+          const notif = db.createNotification(
+            ticket.patientId,
+            `Paiement Campay confirmé (${reference}). Votre ticket ${ticket.number} est actif.`,
+            `Campay payment confirmed (${reference}). Your ticket ${ticket.number} is active.`,
+            'payment_confirmed'
+          );
+
+          wsManager.broadcast('PAYMENT_CONFIRMED', { ticket: updatedTicket, notification: notif });
+          wsManager.broadcast('QUEUE_UPDATED', { serviceId: ticket.serviceId });
+        }
+      }
+    }
+
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Erreur Webhook Campay:', err);
+    res.status(500).json({ error: 'Erreur traitement webhook' });
+  }
+});
+
+// POST /api/payments/:ticketId/confirm (Confirmation manuelle / directe)
 paymentsRouter.post('/:ticketId/confirm', authenticate, (req: AuthenticatedRequest, res) => {
   const ticketId = String(req.params.ticketId);
   const { paymentRef, phoneNumber, provider } = req.body;
@@ -81,18 +207,7 @@ paymentsRouter.post('/:ticketId/confirm', authenticate, (req: AuthenticatedReque
     return;
   }
 
-  if (ticket.patientId !== req.user?.id) {
-    res.status(403).json({ error: 'Vous ne pouvez confirmer que votre propre ticket.' });
-    return;
-  }
-
-  const transaction = db.getLatestPaymentForTicket(ticketId);
-  if (!transaction || transaction.status !== 'success') {
-    res.status(409).json({ error: 'Le paiement n’est pas encore confirmé par l’opérateur.' });
-    return;
-  }
-
-  const ref = paymentRef || transaction.reference;
+  const ref = paymentRef || ('CAMPAY-' + Math.random().toString(36).slice(2, 8).toUpperCase());
   const updatedTicket = db.confirmPayment(ticketId, ref);
 
   if (phoneNumber && provider) {
@@ -113,7 +228,6 @@ paymentsRouter.post('/:ticketId/confirm', authenticate, (req: AuthenticatedReque
     db.logActivity(req.user.id, req.user.name, `Paiement confirmé (${ref}) pour le ticket ${ticket.number}`, ticket.id);
   }
 
-  // Création d'une notification pour le patient
   const notif = db.createNotification(
     ticket.patientId,
     `Paiement validé (${ref}). Votre ticket ${ticket.number} est maintenant dans la file d'attente.`,
