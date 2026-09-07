@@ -45,9 +45,25 @@ export default function Payment() {
     setStep('processing');
     try {
       const providerKey = provider === 'mtn' ? 'mtn_momo' : 'orange_money';
-      const res = await api.payments.confirm(ticket.id, undefined, phone, providerKey);
-      setConfirmedTicket(res.ticket);
-      setStep('success');
+      await api.payments.initiate(ticket.id, phone, providerKey);
+
+      const startedAt = Date.now();
+      const checkStatus = async (): Promise<void> => {
+        const payment = await api.payments.status(ticket.id);
+        if (payment.status === 'success') {
+          const res = await api.payments.confirm(ticket.id, payment.reference);
+          setConfirmedTicket(res.ticket);
+          setStep('success');
+          return;
+        }
+        if (payment.status === 'failed' || Date.now() - startedAt >= 120000) {
+          setStep('form');
+          return;
+        }
+        window.setTimeout(() => { void checkStatus(); }, 3000);
+      };
+
+      await checkStatus();
     } catch (err) {
       console.error('Payment failed', err);
       setStep('form');
@@ -150,7 +166,9 @@ export default function Payment() {
         <div className="text-center py-12 space-y-4">
           <div className="mx-auto w-14 h-14 rounded-full border-4 border-primary border-t-transparent animate-spin" />
           <p className="text-sm font-medium">{t('paymentProcessing')}</p>
-          <p className="text-xs text-muted-foreground">{lang === 'fr' ? 'Validation avec l\'opérateur en cours...' : 'Processing operator payment...'}</p>
+          <p className="text-xs text-muted-foreground">{lang === 'fr'
+            ? 'Confirmez la demande sur votre téléphone. Votre ticket ne sera ajouté à la file qu’après confirmation.'
+            : 'Confirm the payment request on your phone. Your ticket will join the queue only after confirmation.'}</p>
         </div>
       )}
 

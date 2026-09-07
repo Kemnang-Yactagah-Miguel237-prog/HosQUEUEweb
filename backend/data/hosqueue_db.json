@@ -1,100 +1,18 @@
 {
   "users": [
     {
-      "id": "u-admin",
-      "name": "Admin Principal",
-      "email": "admin@hosqueue.com",
-      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe4VryjEgL7n8CajQAvOzXkJJ4DiQbDGS",
+      "id": "u-vjo7pv9z",
+      "name": "nkem nzie kelly",
+      "email": "ewanekelly40@gmail.com",
+      "password": "$2b$10$dXRmXO4vSClrBSQUPR/vpObyuv1lluLrYxE5jyjxc3q2odZvXW92u",
       "role": "admin",
       "suspended": false,
-      "createdAt": "2025-01-01T08:00:00Z",
-      "createdBy": "system",
-      "lastLogin": "2026-09-07T05:14:38.375Z"
-    },
-    {
-      "id": "u-med1",
-      "name": "Dr. Marie Martin",
-      "email": "dr.martin@hosqueue.com",
-      "password": "$2b$10$V0mmxxBb3KjufqN802BYMeVIPQX8xKIs64vpO71dPeGhhZwbF2hW.",
-      "role": "medical",
-      "serviceId": "svc-1",
-      "suspended": false,
-      "createdAt": "2025-01-02T08:00:00Z",
-      "createdBy": "u-admin",
-      "lastLogin": "2026-09-07T05:14:46.396Z"
-    },
-    {
-      "id": "u-med2",
-      "name": "Dr. Ibrahim Koné",
-      "email": "dr.kone@hosqueue.com",
-      "password": "$2b$10$V0mmxxBb3KjufqN802BYMeVIPQX8xKIs64vpO71dPeGhhZwbF2hW.",
-      "role": "medical",
-      "serviceId": "svc-2",
-      "suspended": false,
-      "createdAt": "2025-01-02T09:00:00Z",
-      "createdBy": "u-admin"
-    },
-    {
-      "id": "u-pat1",
-      "name": "Jean Dupont",
-      "email": "jean.dupont@hosqueue.com",
-      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe5gT8Lct3pKeTabcfmI7JLaEp9Vb7Lcm",
-      "role": "patient",
-      "suspended": false,
-      "createdAt": "2025-01-03T08:00:00Z",
-      "createdBy": "u-admin",
-      "lastLogin": "2026-09-07T05:14:38.243Z"
-    },
-    {
-      "id": "u-pat2",
-      "name": "Aissatou Bah",
-      "email": "aissatou.bah@hosqueue.com",
-      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe5gT8Lct3pKeTabcfmI7JLaEp9Vb7Lcm",
-      "role": "patient",
-      "suspended": false,
-      "createdAt": "2025-01-03T09:00:00Z",
-      "createdBy": "u-admin"
-    },
-    {
-      "id": "u-pat3",
-      "name": "Mamadou Diallo",
-      "email": "m.diallo@hosqueue.com",
-      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe5gT8Lct3pKeTabcfmI7JLaEp9Vb7Lcm",
-      "role": "patient",
-      "suspended": false,
-      "createdAt": "2025-01-03T10:00:00Z",
-      "createdBy": "u-admin"
+      "createdAt": "2026-09-07T10:33:27.873Z",
+      "createdBy": "self-registration",
+      "lastLogin": "2026-09-07T11:14:14.094Z"
     }
   ],
-  "services": [
-    {
-      "id": "svc-1",
-      "nameFr": "Consultation Générale",
-      "nameEn": "General Consultation",
-      "capacity": 50,
-      "bookingFee": 1000,
-      "active": true,
-      "nextNumber": 9
-    },
-    {
-      "id": "svc-2",
-      "nameFr": "Pédiatrie",
-      "nameEn": "Pediatrics",
-      "capacity": 30,
-      "bookingFee": 1500,
-      "active": true,
-      "nextNumber": 5
-    },
-    {
-      "id": "svc-3",
-      "nameFr": "Urgences",
-      "nameEn": "Emergency",
-      "capacity": 20,
-      "bookingFee": 500,
-      "active": true,
-      "nextNumber": 3
-    }
-  ],
+  "services": [],
   "tickets": [
     {
       "id": "tk-1",
@@ -113,9 +31,10 @@
       "patientId": "u-pat2",
       "patientName": "Aissatou Bah",
       "serviceId": "svc-1",
-      "status": "waiting",
+      "status": "called",
       "createdAt": "2026-09-07T06:15:00.000Z",
-      "paymentRef": "PAY-002"
+      "paymentRef": "PAY-002",
+      "calledAt": "2026-09-07T09:59:22.501Z"
     },
     {
       "id": "tk-3",
@@ -206,10 +125,50 @@
       "patientId": "u-pat1",
       "patientName": "Jean Dupont",
       "serviceId": "svc-1",
-      "status": "called",
+      "status": "served",
       "createdAt": "2026-09-07T05:14:38.382Z",
       "paymentRef": "PAY-TSZHQI",
-      "calledAt": "2026-09-07T05:14:46.415Z"
+      "calledAt": "2026-09-07T05:14:46.415Z",
+      "servedAt": "2026-09-07T09:59:16.598Z"
+    },
+    {
+      "id": "tk-reilfd75",
+      "number": "CNS-009",
+      "patientId": "u-pat1",
+      "patientName": "Jean Dupont",
+      "serviceId": "svc-1",
+      "status": "waiting",
+      "createdAt": "2026-09-07T10:00:38.366Z",
+      "paymentRef": "PAY-5PFS5F"
+    },
+    {
+      "id": "tk-9txmisq5",
+      "number": "CNS-010",
+      "patientId": "u-pat1",
+      "patientName": "Jean Dupont",
+      "serviceId": "svc-1",
+      "status": "waiting",
+      "createdAt": "2026-09-07T10:05:57.761Z",
+      "paymentRef": "PAY-VLXNV4"
+    },
+    {
+      "id": "tk-1n957wtm",
+      "number": "PDT-001",
+      "patientId": "u-s1wzbdaw",
+      "patientName": "nelly",
+      "serviceId": "svc-tg7g04td",
+      "status": "cancelled",
+      "createdAt": "2026-09-07T10:38:11.454Z",
+      "paymentRef": "PAY-K9TZV6"
+    },
+    {
+      "id": "tk-7d6wqmhc",
+      "number": "PDT-002",
+      "patientId": "u-s1wzbdaw",
+      "patientName": "nelly",
+      "serviceId": "svc-tg7g04td",
+      "status": "pending_payment",
+      "createdAt": "2026-09-07T10:43:29.374Z"
     }
   ],
   "notifications": [
@@ -239,6 +198,51 @@
       "read": false,
       "createdAt": "2026-09-07T05:14:46.416Z",
       "type": "your_turn"
+    },
+    {
+      "id": "n-1h3akwxq",
+      "userId": "u-pat2",
+      "messageFr": "C'est votre tour ! Veuillez vous présenter avec le ticket CG-002.",
+      "messageEn": "It's your turn! Please proceed to the consultation room with ticket CG-002.",
+      "read": false,
+      "createdAt": "2026-09-07T09:59:22.505Z",
+      "type": "your_turn"
+    },
+    {
+      "id": "n-xtoas77w",
+      "userId": "u-pat1",
+      "messageFr": "Paiement validé (PAY-5PFS5F). Votre ticket CNS-009 est maintenant dans la file d'attente.",
+      "messageEn": "Payment confirmed (PAY-5PFS5F). Your ticket CNS-009 is now in the active queue.",
+      "read": false,
+      "createdAt": "2026-09-07T10:00:57.621Z",
+      "type": "payment_confirmed"
+    },
+    {
+      "id": "n-xa0s3flx",
+      "userId": "u-pat1",
+      "messageFr": "Paiement validé (PAY-VLXNV4). Votre ticket CNS-010 est maintenant dans la file d'attente.",
+      "messageEn": "Payment confirmed (PAY-VLXNV4). Your ticket CNS-010 is now in the active queue.",
+      "read": false,
+      "createdAt": "2026-09-07T10:06:11.113Z",
+      "type": "payment_confirmed"
+    },
+    {
+      "id": "n-7keqadaq",
+      "userId": "u-s1wzbdaw",
+      "messageFr": "Votre compte HosQUEUE (patient) a été créé avec succès.",
+      "messageEn": "Your HosQUEUE account (patient) has been successfully created.",
+      "read": false,
+      "createdAt": "2026-09-07T10:35:03.622Z",
+      "type": "account_created"
+    },
+    {
+      "id": "n-7qo8lbtd",
+      "userId": "u-s1wzbdaw",
+      "messageFr": "Paiement validé (PAY-K9TZV6). Votre ticket PDT-001 est maintenant dans la file d'attente.",
+      "messageEn": "Payment confirmed (PAY-K9TZV6). Your ticket PDT-001 is now in the active queue.",
+      "read": false,
+      "createdAt": "2026-09-07T10:38:21.028Z",
+      "type": "payment_confirmed"
     }
   ],
   "activities": [
@@ -315,6 +319,352 @@
       "action": "Appel du patient ticket CNS-008",
       "targetId": "tk-6xxjhoeb",
       "createdAt": "2026-09-07T05:14:46.416Z"
+    },
+    {
+      "id": "a-l1w95pk7",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T09:58:59.597Z"
+    },
+    {
+      "id": "a-dw8k1ujw",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Consultation terminée pour le ticket CNS-008",
+      "targetId": "tk-6xxjhoeb",
+      "createdAt": "2026-09-07T09:59:16.598Z"
+    },
+    {
+      "id": "a-j6vpkuvl",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Appel du patient ticket CG-002",
+      "targetId": "tk-2",
+      "createdAt": "2026-09-07T09:59:22.503Z"
+    },
+    {
+      "id": "a-zmtcmkoc",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T09:59:32.666Z"
+    },
+    {
+      "id": "a-7nsq3c60",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T09:59:59.365Z"
+    },
+    {
+      "id": "a-od151vix",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Réservation de ticket CNS-009",
+      "targetId": "tk-reilfd75",
+      "createdAt": "2026-09-07T10:00:38.367Z"
+    },
+    {
+      "id": "a-0i04f55t",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Paiement confirmé (PAY-5PFS5F) pour le ticket CNS-009",
+      "targetId": "tk-reilfd75",
+      "createdAt": "2026-09-07T10:00:57.617Z"
+    },
+    {
+      "id": "a-di6jzbdn",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T10:03:11.418Z"
+    },
+    {
+      "id": "a-7hiekcre",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Réservation de ticket CNS-010",
+      "targetId": "tk-9txmisq5",
+      "createdAt": "2026-09-07T10:05:57.762Z"
+    },
+    {
+      "id": "a-arguamn9",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Paiement confirmé (PAY-VLXNV4) pour le ticket CNS-010",
+      "targetId": "tk-9txmisq5",
+      "createdAt": "2026-09-07T10:06:11.112Z"
+    },
+    {
+      "id": "a-1uzxv9qo",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T10:07:21.632Z"
+    },
+    {
+      "id": "a-m5pxukkm",
+      "userId": "u-bosgg1oh",
+      "userName": "Test Administrator",
+      "action": "Création d’un compte administrateur / Administrator account created",
+      "createdAt": "2026-09-07T10:08:09.649Z"
+    },
+    {
+      "id": "a-y4qwjibp",
+      "userId": "u-bosgg1oh",
+      "userName": "Test Administrator",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T10:08:19.098Z"
+    },
+    {
+      "id": "a-rg6hm2oo",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Création d’un compte administrateur / Administrator account created",
+      "createdAt": "2026-09-07T10:11:26.766Z"
+    },
+    {
+      "id": "a-iope704a",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du service Urgences",
+      "targetId": "svc-3",
+      "createdAt": "2026-09-07T10:12:12.936Z"
+    },
+    {
+      "id": "a-04ufxsej",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du service Pédiatrie",
+      "targetId": "svc-2",
+      "createdAt": "2026-09-07T10:12:16.813Z"
+    },
+    {
+      "id": "a-8ibybgpc",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du service Consultation Générale",
+      "targetId": "svc-1",
+      "createdAt": "2026-09-07T10:12:21.398Z"
+    },
+    {
+      "id": "a-5o8e5d8j",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du compte Admin Principal",
+      "targetId": "u-admin",
+      "createdAt": "2026-09-07T10:12:28.844Z"
+    },
+    {
+      "id": "a-l2x318mj",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du compte Dr. Marie Martin",
+      "targetId": "u-med1",
+      "createdAt": "2026-09-07T10:12:33.505Z"
+    },
+    {
+      "id": "a-oxq9g32e",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du compte Dr. Ibrahim Koné",
+      "targetId": "u-med2",
+      "createdAt": "2026-09-07T10:12:36.721Z"
+    },
+    {
+      "id": "a-m48atgao",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du compte Jean Dupont",
+      "targetId": "u-pat1",
+      "createdAt": "2026-09-07T10:12:41.264Z"
+    },
+    {
+      "id": "a-mietwteu",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du compte Aissatou Bah",
+      "targetId": "u-pat2",
+      "createdAt": "2026-09-07T10:12:46.365Z"
+    },
+    {
+      "id": "a-g5fvdcio",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Suppression du compte Mamadou Diallo",
+      "targetId": "u-pat3",
+      "createdAt": "2026-09-07T10:12:50.913Z"
+    },
+    {
+      "id": "a-ssobd0ci",
+      "userId": "u-6mz4c3a9",
+      "userName": "kemnang yactagah miguel",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T10:14:53.216Z"
+    },
+    {
+      "id": "a-uy4lqndl",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Création d’un compte administrateur / Administrator account created",
+      "createdAt": "2026-09-07T10:33:27.876Z"
+    },
+    {
+      "id": "a-2tigtddj",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T10:33:56.476Z"
+    },
+    {
+      "id": "a-nbqocxb9",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T10:34:30.125Z"
+    },
+    {
+      "id": "a-jw2avmda",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Création du compte nelly (patient)",
+      "targetId": "u-s1wzbdaw",
+      "createdAt": "2026-09-07T10:35:03.620Z"
+    },
+    {
+      "id": "a-zqap2lmj",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T10:35:10.173Z"
+    },
+    {
+      "id": "a-2q2txlts",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T10:35:25.763Z"
+    },
+    {
+      "id": "a-gm8ddhup",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T10:35:45.539Z"
+    },
+    {
+      "id": "a-zxlj7kfh",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T10:37:32.299Z"
+    },
+    {
+      "id": "a-nqrqy43t",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Création du service pediatry",
+      "targetId": "svc-tg7g04td",
+      "createdAt": "2026-09-07T10:37:52.399Z"
+    },
+    {
+      "id": "a-5hfj2cuw",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T10:37:56.677Z"
+    },
+    {
+      "id": "a-57cj6ota",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T10:38:03.909Z"
+    },
+    {
+      "id": "a-nciy4lw2",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Réservation de ticket PDT-001",
+      "targetId": "tk-1n957wtm",
+      "createdAt": "2026-09-07T10:38:11.457Z"
+    },
+    {
+      "id": "a-ei7s23qa",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Paiement confirmé (PAY-K9TZV6) pour le ticket PDT-001",
+      "targetId": "tk-1n957wtm",
+      "createdAt": "2026-09-07T10:38:21.027Z"
+    },
+    {
+      "id": "a-sktwl0ul",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Annulation du ticket PDT-001",
+      "targetId": "tk-1n957wtm",
+      "createdAt": "2026-09-07T10:43:19.862Z"
+    },
+    {
+      "id": "a-bfwj86m8",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Réservation de ticket PDT-002",
+      "targetId": "tk-7d6wqmhc",
+      "createdAt": "2026-09-07T10:43:29.376Z"
+    },
+    {
+      "id": "a-tldmmy5z",
+      "userId": "u-s1wzbdaw",
+      "userName": "nelly",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T10:56:06.688Z"
+    },
+    {
+      "id": "a-6xbtq93f",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T11:05:42.355Z"
+    },
+    {
+      "id": "a-fo1g6lla",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Suppression du compte kemnang yactagah miguel",
+      "targetId": "u-6mz4c3a9",
+      "createdAt": "2026-09-07T11:06:15.639Z"
+    },
+    {
+      "id": "a-dsxatdwg",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Suppression du compte nelly",
+      "targetId": "u-s1wzbdaw",
+      "createdAt": "2026-09-07T11:06:39.340Z"
+    },
+    {
+      "id": "a-9r1weel3",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Suppression du service pediatry",
+      "targetId": "svc-tg7g04td",
+      "createdAt": "2026-09-07T11:06:48.294Z"
+    },
+    {
+      "id": "a-bqp25o7u",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Déconnexion / Logout",
+      "createdAt": "2026-09-07T11:13:43.407Z"
+    },
+    {
+      "id": "a-imvjr4mn",
+      "userId": "u-vjo7pv9z",
+      "userName": "nkem nzie kelly",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T11:14:14.096Z"
     }
   ],
   "payments": [
@@ -329,6 +679,54 @@
       "reference": "PAY-TSZHQI",
       "status": "success",
       "createdAt": "2026-09-07T05:14:38.387Z"
+    },
+    {
+      "id": "pay-okum1m0b",
+      "ticketId": "tk-reilfd75",
+      "patientId": "u-pat1",
+      "serviceId": "svc-1",
+      "amount": 1000,
+      "phoneNumber": "653991137",
+      "provider": "mtn_momo",
+      "reference": "PAY-5PFS5F",
+      "status": "success",
+      "createdAt": "2026-09-07T10:00:57.615Z"
+    },
+    {
+      "id": "pay-6tzoy9qu",
+      "ticketId": "tk-9txmisq5",
+      "patientId": "u-pat1",
+      "serviceId": "svc-1",
+      "amount": 1000,
+      "phoneNumber": "678947114",
+      "provider": "mtn_momo",
+      "reference": "PAY-VLXNV4",
+      "status": "success",
+      "createdAt": "2026-09-07T10:06:11.110Z"
+    },
+    {
+      "id": "pay-fbw6zo15",
+      "ticketId": "tk-1n957wtm",
+      "patientId": "u-s1wzbdaw",
+      "serviceId": "svc-tg7g04td",
+      "amount": 1000,
+      "phoneNumber": "653991137",
+      "provider": "mtn_momo",
+      "reference": "PAY-K9TZV6",
+      "status": "success",
+      "createdAt": "2026-09-07T10:38:21.025Z"
+    },
+    {
+      "id": "pay-xnz9y3ya",
+      "ticketId": "tk-7d6wqmhc",
+      "patientId": "u-s1wzbdaw",
+      "serviceId": "svc-tg7g04td",
+      "amount": 1000,
+      "phoneNumber": "653991137",
+      "provider": "mtn_momo",
+      "reference": "MM-FXJF6A",
+      "status": "pending",
+      "createdAt": "2026-09-07T10:43:42.333Z"
     }
   ]
 }

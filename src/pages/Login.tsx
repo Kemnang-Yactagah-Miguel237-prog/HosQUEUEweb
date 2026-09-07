@@ -21,6 +21,7 @@ export default function Login() {
   const navigate = useNavigate();
 
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [adminRegistration, setAdminRegistration] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +37,7 @@ export default function Login() {
       .catch(() => setHasAdmin(true));
   }, []);
 
-  const isFirstAdmin = selectedRole === 'admin' && !hasAdmin;
+  const isAdminRegistration = selectedRole === 'admin' && !hasAdmin;
 
   useEffect(() => {
     if (user) {
@@ -50,12 +51,12 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    if (isFirstAdmin && password !== confirmPassword) {
+    if (isAdminRegistration && password !== confirmPassword) {
       setError(t('passwordsDoNotMatch'));
       setLoading(false);
       return;
     }
-    const result = await (isFirstAdmin ? registerFirstAdmin(name, email, password) : login(email, password));
+    const result = await (isAdminRegistration ? registerFirstAdmin(name, email, password) : login(email, password));
     setLoading(false);
     if (!result.success) { setError(t(result.error as any)); return; }
   };
@@ -126,14 +127,14 @@ export default function Login() {
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="w-full max-w-md space-y-6">
             <div>
-              <h2 className="text-2xl font-serif text-foreground">{isFirstAdmin ? t('registerTitle') : (lang === 'fr' ? 'Bienvenue' : 'Welcome')}</h2>
-              <p className="text-sm text-muted-foreground mt-1">{isFirstAdmin ? t('firstAdminNotice') : t('chooseRole')}</p>
+              <h2 className="text-2xl font-serif text-foreground">{isAdminRegistration ? t('registerTitle') : (lang === 'fr' ? 'Bienvenue' : 'Welcome')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">{isAdminRegistration ? t('firstAdminNotice') : t('chooseRole')}</p>
             </div>
 
             {/* Role selector */}
             <div className="grid grid-cols-3 gap-3">
               {roles.map(r => (
-                <button key={r.key} onClick={() => { setSelectedRole(r.key); setEmail(''); setPassword(''); }}
+                <button key={r.key} onClick={() => { setSelectedRole(r.key); setAdminRegistration(r.key === 'admin' && !hasAdmin); setEmail(''); setName(''); setPassword(''); setConfirmPassword(''); setError(''); }}
                   className={`flex flex-col items-center gap-2 p-4 border-2 rounded transition-all ${selectedRole === r.key ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-primary/40 text-muted-foreground hover:text-foreground'}`}>
                   {r.icon}
                   <span className="text-xs font-semibold">{t(r.key)}</span>
@@ -144,7 +145,7 @@ export default function Login() {
 
             {/* Login form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              {isFirstAdmin && (
+              {isAdminRegistration && (
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{t('fullName')}</label>
                   <input type="text" value={name} onChange={e => setName(e.target.value)} required
@@ -158,7 +159,7 @@ export default function Login() {
                   className="w-full px-3 py-2.5 bg-card border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow" />
               </div>
 
-              {isFirstAdmin && (
+              {isAdminRegistration && (
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{t('confirmPassword')}</label>
                   <input type={showPwd ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required
@@ -192,18 +193,25 @@ export default function Login() {
                     <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     {t('loading')}
                   </>
-                ) : isFirstAdmin ? t('registerBtn') : t('loginButton')}
+                ) : isAdminRegistration ? t('registerBtn') : t('loginButton')}
               </button>
             </form>
 
             {/* Demo credentials hint */}
             <div className="border border-border/60 rounded p-3 bg-muted/30">
-              <p className="text-[10px] font-mono text-muted-foreground mb-1.5 font-semibold uppercase tracking-wide">{isFirstAdmin ? t('firstAdminNotice') : 'Demo credentials'}</p>
+              <p className="text-[10px] font-mono text-muted-foreground mb-1.5 font-semibold uppercase tracking-wide">{isAdminRegistration ? t('firstAdminNotice') : 'Demo credentials'}</p>
               <div className="grid grid-cols-1 gap-0.5 text-[10px] font-mono text-muted-foreground">
                 <span>dr.martin@hosqueue.com / Staff@123</span>
                 <span>jean.dupont@hosqueue.com / Patient@123</span>
               </div>
             </div>
+
+            {selectedRole === 'admin' && !hasAdmin && (
+              <button type="button" onClick={() => { setAdminRegistration(value => !value); setError(''); }}
+                className="w-full text-xs text-primary hover:underline">
+                {isAdminRegistration ? 'Already have an administrator account? Sign in' : 'Create the first administrator account'}
+              </button>
+            )}
           </div>
         </div>
       </div>

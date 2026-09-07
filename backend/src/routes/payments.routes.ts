@@ -20,6 +20,11 @@ paymentsRouter.post('/initiate', authenticate, (req: AuthenticatedRequest, res) 
     return;
   }
 
+  if (ticket.patientId !== req.user?.id) {
+    res.status(403).json({ error: 'Vous ne pouvez payer que votre propre ticket.' });
+    return;
+  }
+
   const service = db.getServiceById(ticket.serviceId);
   const amount = service?.bookingFee || 1000;
 
@@ -42,6 +47,29 @@ paymentsRouter.post('/initiate', authenticate, (req: AuthenticatedRequest, res) 
   });
 });
 
+// GET /api/payments/:ticketId/status
+paymentsRouter.get('/:ticketId/status', authenticate, (req: AuthenticatedRequest, res) => {
+  const ticketId = String(req.params.ticketId);
+  const ticket = db.getTicketById(ticketId);
+  if (!ticket) {
+    res.status(404).json({ error: 'Ticket non trouvé' });
+    return;
+  }
+
+  if (ticket.patientId !== req.user?.id) {
+    res.status(403).json({ error: 'Accès non autorisé.' });
+    return;
+  }
+
+  const transaction = db.getLatestPaymentForTicket(ticketId);
+  if (!transaction) {
+    res.status(404).json({ error: 'Aucun paiement trouvé pour ce ticket.' });
+    return;
+  }
+
+  res.json({ status: transaction.status, reference: transaction.reference });
+});
+
 // POST /api/payments/:ticketId/confirm
 paymentsRouter.post('/:ticketId/confirm', authenticate, (req: AuthenticatedRequest, res) => {
   const ticketId = String(req.params.ticketId);
@@ -53,7 +81,18 @@ paymentsRouter.post('/:ticketId/confirm', authenticate, (req: AuthenticatedReque
     return;
   }
 
-  const ref = paymentRef || ('PAY-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+  if (ticket.patientId !== req.user?.id) {
+    res.status(403).json({ error: 'Vous ne pouvez confirmer que votre propre ticket.' });
+    return;
+  }
+
+  const transaction = db.getLatestPaymentForTicket(ticketId);
+  if (!transaction || transaction.status !== 'success') {
+    res.status(409).json({ error: 'Le paiement n’est pas encore confirmé par l’opérateur.' });
+    return;
+  }
+
+  const ref = paymentRef || transaction.reference;
   const updatedTicket = db.confirmPayment(ticketId, ref);
 
   if (phoneNumber && provider) {

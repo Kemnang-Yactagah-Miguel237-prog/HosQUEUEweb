@@ -202,6 +202,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ ticketId, phoneNumber, provider }),
       }),
+    status: (ticketId: string) =>
+      request<{ status: 'pending' | 'success' | 'failed'; reference: string }>(`/payments/${ticketId}/status`),
     confirm: (ticketId: string, paymentRef?: string, phoneNumber?: string, provider?: string) =>
       request<{ ticket: Ticket; paymentRef: string }>(`/payments/${ticketId}/confirm`, {
         method: 'POST',

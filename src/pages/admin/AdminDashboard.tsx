@@ -20,17 +20,15 @@ export default function AdminDashboard() {
 
       const today = new Date().toDateString();
       const todayTickets = tickets.filter(tk => new Date(tk.createdAt).toDateString() === today);
-      const totalWaiting = tickets.filter(tk => tk.status === 'waiting').length;
-      const totalServed = todayTickets.filter(tk => tk.status === 'served').length;
       const activeStaff = users.filter(u => u.role === 'medical' && !u.suspended).length;
       const activeServices = services.filter(s => s.active).length;
 
-      setStats({ waiting: totalWaiting, served: totalServed, staff: activeStaff, services: activeServices });
+      setStats({ waiting: 0, served: 0, staff: activeStaff, services: activeServices });
 
       const newAlerts: Alert[] = [];
       const svcStats = services.filter(s => s.active).map(s => {
-        const w = tickets.filter(tk => tk.serviceId === s.id && tk.status === 'waiting').length;
-        const sv = todayTickets.filter(tk => tk.serviceId === s.id && tk.status === 'served').length;
+        const w = todayTickets.filter(tk => tk.serviceId === s.id && tk.status === 'waiting').length;
+        const sv = tickets.filter(tk => tk.serviceId === s.id && tk.status === 'served' && tk.servedAt && new Date(tk.servedAt).toDateString() === today).length;
         if (w >= 10) newAlerts.push({ level: 'critical', service: lang === 'fr' ? s.nameFr : s.nameEn, count: w });
         else if (w >= 5) newAlerts.push({ level: 'warn', service: lang === 'fr' ? s.nameFr : s.nameEn, count: w });
         return { id: s.id, nameFr: s.nameFr, nameEn: s.nameEn, waiting: w, served: sv };

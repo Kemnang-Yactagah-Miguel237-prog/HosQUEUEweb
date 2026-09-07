@@ -66,12 +66,14 @@ export default function MedicalQueue() {
 
   const handleCallNext = async () => {
     if (!serviceId || loadingAction) return;
+    const waitingRoomWindow = window.open('/waiting-room', '_blank');
     setLoadingAction(true);
     try {
       await api.tickets.callNext(serviceId);
       await loadData();
     } catch (err: any) {
       console.error('Error calling next patient', err);
+      waitingRoomWindow?.close();
     } finally {
       setLoadingAction(false);
     }

@@ -82,7 +82,10 @@ export default function Shell() {
         <header className="bg-card border-b border-border sticky top-0 z-40">
           <div className="px-5 h-16 flex items-center gap-4">
             <div className="md:hidden"><Logo size="sm" /></div>
-            <div className="hidden md:block flex-1"><p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">{t(user?.role as any)}</p></div>
+            <div className="hidden md:flex items-center gap-5 flex-1">
+              <Logo size="sm" />
+              <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">{t(user?.role as any)}</p>
+            </div>
             <div className="flex items-center gap-2 ml-auto"><ThemeLangBar /><NotificationBell />
               <div className="flex items-center gap-2 pl-3 border-l border-border">
                 <div className="hidden sm:block text-right"><p className="text-xs font-semibold leading-none">{user?.name}</p><p className="text-[10px] text-muted-foreground mt-1">{user?.email}</p></div>

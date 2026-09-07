@@ -444,6 +444,12 @@ class Database {
   public getPayments(): PaymentTransaction[] {
     return this.data.payments;
   }
+
+  public getLatestPaymentForTicket(ticketId: string): PaymentTransaction | null {
+    return this.data.payments
+      .filter(payment => payment.ticketId === ticketId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
+  }
 }
 
 export const db = new Database();
