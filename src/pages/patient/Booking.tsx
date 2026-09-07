@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useLang, useAuth } from '../../lib/store';
-import { getServiceById, getWaitingTickets, getEstimatedWait, createTicket, getTicketsByPatient, type Service } from '../../lib/db';
+import { api } from '../../lib/api';
+import type { Service } from '../../lib/db';
 
 export default function Booking() {
   const { serviceId } = useParams<{ serviceId: string }>();
@@ -11,29 +12,49 @@ export default function Booking() {
   const [service, setService] = useState<Service | null>(null);
   const [queueLen, setQueueLen] = useState(0);
   const [hasPending, setHasPending] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!serviceId) return;
-    const svc = getServiceById(serviceId);
-    if (!svc) { navigate('/patient'); return; }
-    setService(svc);
-    setQueueLen(getWaitingTickets(serviceId).length);
-    // check for pending payment
-    if (user) {
-      const pending = getTicketsByPatient(user.id).find(tk => tk.serviceId === serviceId && tk.status === 'pending_payment');
-      if (pending) setHasPending(pending.id);
-    }
-  }, [serviceId, user]);
 
-  const handleBook = () => {
+    api.services.getById(serviceId)
+      .then(svc => {
+        setService(svc);
+      })
+      .catch(() => {
+        navigate('/patient');
+      });
+
+    api.tickets.getAll({ serviceId, status: 'waiting' })
+      .then(tks => setQueueLen(tks.length))
+      .catch(() => {});
+
+    if (user) {
+      api.tickets.getAll({ patientId: user.id })
+        .then(tks => {
+          const pending = tks.find(tk => tk.serviceId === serviceId && tk.status === 'pending_payment');
+          if (pending) setHasPending(pending.id);
+        })
+        .catch(() => {});
+    }
+  }, [serviceId, user, navigate]);
+
+  const handleBook = async () => {
     if (!service || !user) return;
-    const ticket = createTicket(user.id, user.name, service.id);
-    navigate(`/patient/payment/${ticket.id}`);
+    setLoading(true);
+    try {
+      const ticket = await api.tickets.create(service.id);
+      navigate(`/patient/payment/${ticket.id}`);
+    } catch (err: any) {
+      console.error('Failed to create ticket', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!service) return null;
 
-  const wait = getEstimatedWait(queueLen + 1);
+  const wait = Math.max(0, (queueLen + 1) * 10);
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
@@ -100,8 +121,12 @@ export default function Booking() {
             <button onClick={() => navigate('/patient')} className="flex-1 py-2.5 border border-border rounded text-sm font-medium hover:bg-muted transition-colors">
               {t('cancel')}
             </button>
-            <button onClick={handleBook} className="flex-1 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded hover:opacity-90 transition-opacity">
-              {t('proceedToPayment')}
+            <button
+              onClick={handleBook}
+              disabled={loading}
+              className="flex-1 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {loading ? t('loading') : t('proceedToPayment')}
             </button>
           </div>
         </div>

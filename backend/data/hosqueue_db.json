@@ -1,0 +1,334 @@
+{
+  "users": [
+    {
+      "id": "u-admin",
+      "name": "Admin Principal",
+      "email": "admin@hosqueue.com",
+      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe4VryjEgL7n8CajQAvOzXkJJ4DiQbDGS",
+      "role": "admin",
+      "suspended": false,
+      "createdAt": "2025-01-01T08:00:00Z",
+      "createdBy": "system",
+      "lastLogin": "2026-09-07T05:14:38.375Z"
+    },
+    {
+      "id": "u-med1",
+      "name": "Dr. Marie Martin",
+      "email": "dr.martin@hosqueue.com",
+      "password": "$2b$10$V0mmxxBb3KjufqN802BYMeVIPQX8xKIs64vpO71dPeGhhZwbF2hW.",
+      "role": "medical",
+      "serviceId": "svc-1",
+      "suspended": false,
+      "createdAt": "2025-01-02T08:00:00Z",
+      "createdBy": "u-admin",
+      "lastLogin": "2026-09-07T05:14:46.396Z"
+    },
+    {
+      "id": "u-med2",
+      "name": "Dr. Ibrahim Koné",
+      "email": "dr.kone@hosqueue.com",
+      "password": "$2b$10$V0mmxxBb3KjufqN802BYMeVIPQX8xKIs64vpO71dPeGhhZwbF2hW.",
+      "role": "medical",
+      "serviceId": "svc-2",
+      "suspended": false,
+      "createdAt": "2025-01-02T09:00:00Z",
+      "createdBy": "u-admin"
+    },
+    {
+      "id": "u-pat1",
+      "name": "Jean Dupont",
+      "email": "jean.dupont@hosqueue.com",
+      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe5gT8Lct3pKeTabcfmI7JLaEp9Vb7Lcm",
+      "role": "patient",
+      "suspended": false,
+      "createdAt": "2025-01-03T08:00:00Z",
+      "createdBy": "u-admin",
+      "lastLogin": "2026-09-07T05:14:38.243Z"
+    },
+    {
+      "id": "u-pat2",
+      "name": "Aissatou Bah",
+      "email": "aissatou.bah@hosqueue.com",
+      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe5gT8Lct3pKeTabcfmI7JLaEp9Vb7Lcm",
+      "role": "patient",
+      "suspended": false,
+      "createdAt": "2025-01-03T09:00:00Z",
+      "createdBy": "u-admin"
+    },
+    {
+      "id": "u-pat3",
+      "name": "Mamadou Diallo",
+      "email": "m.diallo@hosqueue.com",
+      "password": "$2b$10$V0mmxxBb3KjufqN802BYMe5gT8Lct3pKeTabcfmI7JLaEp9Vb7Lcm",
+      "role": "patient",
+      "suspended": false,
+      "createdAt": "2025-01-03T10:00:00Z",
+      "createdBy": "u-admin"
+    }
+  ],
+  "services": [
+    {
+      "id": "svc-1",
+      "nameFr": "Consultation Générale",
+      "nameEn": "General Consultation",
+      "capacity": 50,
+      "bookingFee": 1000,
+      "active": true,
+      "nextNumber": 9
+    },
+    {
+      "id": "svc-2",
+      "nameFr": "Pédiatrie",
+      "nameEn": "Pediatrics",
+      "capacity": 30,
+      "bookingFee": 1500,
+      "active": true,
+      "nextNumber": 5
+    },
+    {
+      "id": "svc-3",
+      "nameFr": "Urgences",
+      "nameEn": "Emergency",
+      "capacity": 20,
+      "bookingFee": 500,
+      "active": true,
+      "nextNumber": 3
+    }
+  ],
+  "tickets": [
+    {
+      "id": "tk-1",
+      "number": "CG-001",
+      "patientId": "u-pat1",
+      "patientName": "Jean Dupont",
+      "serviceId": "svc-1",
+      "status": "served",
+      "createdAt": "2026-09-07T06:05:00.000Z",
+      "paymentRef": "PAY-001",
+      "servedAt": "2026-09-07T06:30:00.000Z"
+    },
+    {
+      "id": "tk-2",
+      "number": "CG-002",
+      "patientId": "u-pat2",
+      "patientName": "Aissatou Bah",
+      "serviceId": "svc-1",
+      "status": "waiting",
+      "createdAt": "2026-09-07T06:15:00.000Z",
+      "paymentRef": "PAY-002"
+    },
+    {
+      "id": "tk-3",
+      "number": "CG-003",
+      "patientId": "u-pat3",
+      "patientName": "Mamadou Diallo",
+      "serviceId": "svc-1",
+      "status": "waiting",
+      "createdAt": "2026-09-07T06:20:00.000Z",
+      "paymentRef": "PAY-003"
+    },
+    {
+      "id": "tk-4",
+      "number": "CG-004",
+      "patientId": "u-pat1",
+      "patientName": "Jean Dupont",
+      "serviceId": "svc-1",
+      "status": "waiting",
+      "createdAt": "2026-09-07T06:25:00.000Z",
+      "paymentRef": "PAY-004"
+    },
+    {
+      "id": "tk-5",
+      "number": "CG-005",
+      "patientId": "u-pat2",
+      "patientName": "Aissatou Bah",
+      "serviceId": "svc-1",
+      "status": "served",
+      "createdAt": "2026-09-07T06:10:00.000Z",
+      "paymentRef": "PAY-005",
+      "calledAt": "2026-09-07T06:45:00.000Z",
+      "servedAt": "2026-09-07T05:14:46.412Z"
+    },
+    {
+      "id": "tk-6",
+      "number": "PED-001",
+      "patientId": "u-pat3",
+      "patientName": "Mamadou Diallo",
+      "serviceId": "svc-2",
+      "status": "waiting",
+      "createdAt": "2026-09-07T06:30:00.000Z",
+      "paymentRef": "PAY-006"
+    },
+    {
+      "id": "tk-7",
+      "number": "PED-002",
+      "patientId": "u-pat1",
+      "patientName": "Jean Dupont",
+      "serviceId": "svc-2",
+      "status": "waiting",
+      "createdAt": "2026-09-07T06:35:00.000Z",
+      "paymentRef": "PAY-007"
+    },
+    {
+      "id": "tk-8",
+      "number": "URG-001",
+      "patientId": "u-pat2",
+      "patientName": "Aissatou Bah",
+      "serviceId": "svc-3",
+      "status": "served",
+      "createdAt": "2026-09-07T05:30:00.000Z",
+      "paymentRef": "PAY-008",
+      "servedAt": "2026-09-07T05:45:00.000Z"
+    },
+    {
+      "id": "tk-9",
+      "number": "URG-002",
+      "patientId": "u-pat3",
+      "patientName": "Mamadou Diallo",
+      "serviceId": "svc-3",
+      "status": "waiting",
+      "createdAt": "2026-09-07T06:00:00.000Z",
+      "paymentRef": "PAY-009"
+    },
+    {
+      "id": "tk-10",
+      "number": "CG-006",
+      "patientId": "u-pat3",
+      "patientName": "Mamadou Diallo",
+      "serviceId": "svc-1",
+      "status": "skipped",
+      "createdAt": "2026-09-07T05:50:00.000Z",
+      "paymentRef": "PAY-010"
+    },
+    {
+      "id": "tk-6xxjhoeb",
+      "number": "CNS-008",
+      "patientId": "u-pat1",
+      "patientName": "Jean Dupont",
+      "serviceId": "svc-1",
+      "status": "called",
+      "createdAt": "2026-09-07T05:14:38.382Z",
+      "paymentRef": "PAY-TSZHQI",
+      "calledAt": "2026-09-07T05:14:46.415Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "n-1",
+      "userId": "u-pat1",
+      "messageFr": "Bienvenue sur HosQUEUE ! Votre compte est prêt.",
+      "messageEn": "Welcome to HosQUEUE! Your account is ready.",
+      "read": true,
+      "createdAt": "2026-09-07T05:05:28.334Z",
+      "type": "account_created"
+    },
+    {
+      "id": "n-1wmnsjk5",
+      "userId": "u-pat1",
+      "messageFr": "Paiement validé (PAY-TSZHQI). Votre ticket CNS-008 est maintenant dans la file d'attente.",
+      "messageEn": "Payment confirmed (PAY-TSZHQI). Your ticket CNS-008 is now in the active queue.",
+      "read": false,
+      "createdAt": "2026-09-07T05:14:38.387Z",
+      "type": "payment_confirmed"
+    },
+    {
+      "id": "n-ii8df1fm",
+      "userId": "u-pat1",
+      "messageFr": "C'est votre tour ! Veuillez vous présenter avec le ticket CNS-008.",
+      "messageEn": "It's your turn! Please proceed to the consultation room with ticket CNS-008.",
+      "read": false,
+      "createdAt": "2026-09-07T05:14:46.416Z",
+      "type": "your_turn"
+    }
+  ],
+  "activities": [
+    {
+      "id": "act-1",
+      "userId": "u-admin",
+      "userName": "Admin Principal",
+      "action": "Initialisation du système HosQUEUE",
+      "createdAt": "2026-09-07T05:05:28.334Z"
+    },
+    {
+      "id": "a-h227q9iu",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T05:06:37.518Z"
+    },
+    {
+      "id": "a-spzeir6y",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T05:14:38.244Z"
+    },
+    {
+      "id": "a-14msjj89",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T05:14:38.312Z"
+    },
+    {
+      "id": "a-y33c49td",
+      "userId": "u-admin",
+      "userName": "Admin Principal",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T05:14:38.377Z"
+    },
+    {
+      "id": "a-hu3fptx6",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Réservation de ticket CNS-008",
+      "targetId": "tk-6xxjhoeb",
+      "createdAt": "2026-09-07T05:14:38.382Z"
+    },
+    {
+      "id": "a-xdo19dcz",
+      "userId": "u-pat1",
+      "userName": "Jean Dupont",
+      "action": "Paiement confirmé (PAY-TSZHQI) pour le ticket CNS-008",
+      "targetId": "tk-6xxjhoeb",
+      "createdAt": "2026-09-07T05:14:38.387Z"
+    },
+    {
+      "id": "a-p20vz9z7",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Connexion / Login",
+      "createdAt": "2026-09-07T05:14:46.398Z"
+    },
+    {
+      "id": "a-plqzr722",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Consultation terminée pour le ticket CG-005",
+      "targetId": "tk-5",
+      "createdAt": "2026-09-07T05:14:46.413Z"
+    },
+    {
+      "id": "a-vmnks6s5",
+      "userId": "u-med1",
+      "userName": "Dr. Marie Martin",
+      "action": "Appel du patient ticket CNS-008",
+      "targetId": "tk-6xxjhoeb",
+      "createdAt": "2026-09-07T05:14:46.416Z"
+    }
+  ],
+  "payments": [
+    {
+      "id": "pay-i31vhw6b",
+      "ticketId": "tk-6xxjhoeb",
+      "patientId": "u-pat1",
+      "serviceId": "svc-1",
+      "amount": 1000,
+      "phoneNumber": "622112233",
+      "provider": "orange_money",
+      "reference": "PAY-TSZHQI",
+      "status": "success",
+      "createdAt": "2026-09-07T05:14:38.387Z"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import Logo from '../components/Logo';
 import { useAuth, useLang, useTheme } from '../lib/store';
-import { getUsers } from '../lib/db';
+import { api } from '../lib/api';
 import type { Role } from '../lib/db';
 
 function FeatureItem({ icon, text }: { icon: React.ReactNode; text: string }) {
@@ -28,7 +28,14 @@ export default function Login() {
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const hasAdmin = getUsers().some(existing => existing.role === 'admin');
+  const [hasAdmin, setHasAdmin] = useState(true);
+
+  useEffect(() => {
+    api.auth.hasAdmin()
+      .then(res => setHasAdmin(res.hasAdmin))
+      .catch(() => setHasAdmin(true));
+  }, []);
+
   const isFirstAdmin = selectedRole === 'admin' && !hasAdmin;
 
   useEffect(() => {
@@ -43,13 +50,12 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
     if (isFirstAdmin && password !== confirmPassword) {
       setError(t('passwordsDoNotMatch'));
       setLoading(false);
       return;
     }
-    const result = isFirstAdmin ? registerFirstAdmin(name, email, password) : login(email, password);
+    const result = await (isFirstAdmin ? registerFirstAdmin(name, email, password) : login(email, password));
     setLoading(false);
     if (!result.success) { setError(t(result.error as any)); return; }
   };

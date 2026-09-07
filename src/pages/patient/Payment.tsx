@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useLang, useAuth } from '../../lib/store';
-import { getTicketById, getServiceById, confirmPayment, updateTicket, createNotification, type Ticket, type Service } from '../../lib/db';
+import { api } from '../../lib/api';
+import type { Ticket, Service } from '../../lib/db';
 
 type Step = 'choose' | 'form' | 'processing' | 'success';
 
@@ -20,31 +21,47 @@ export default function Payment() {
 
   useEffect(() => {
     if (!ticketId) return;
-    const tk = getTicketById(ticketId);
-    if (!tk || tk.status !== 'pending_payment') { navigate('/patient'); return; }
-    setTicket(tk);
-    const svc = getServiceById(tk.serviceId);
-    if (svc) setService(svc);
-  }, [ticketId]);
+    api.tickets.getById(ticketId)
+      .then(tk => {
+        if (!tk || tk.status !== 'pending_payment') {
+          navigate('/patient');
+          return;
+        }
+        setTicket(tk);
+        return api.services.getById(tk.serviceId);
+      })
+      .then(svc => {
+        if (svc) setService(svc);
+      })
+      .catch(() => {
+        navigate('/patient');
+      });
+  }, [ticketId, navigate]);
 
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!ticket || !user || !provider) return;
+
     setStep('processing');
-    await new Promise(r => setTimeout(r, 2200));
-    if (!ticket || !user) return;
-    const confirmed = confirmPayment(ticket.id);
-    if (!confirmed) return;
-    createNotification(user.id,
-      `Paiement confirmé pour ${service?.nameFr}. Votre ticket: ${ticket.number}`,
-      `Payment confirmed for ${service?.nameEn}. Your ticket: ${ticket.number}`,
-      'payment_confirmed'
-    );
-    setConfirmedTicket(confirmed);
-    setStep('success');
+    try {
+      const providerKey = provider === 'mtn' ? 'mtn_momo' : 'orange_money';
+      const res = await api.payments.confirm(ticket.id, undefined, phone, providerKey);
+      setConfirmedTicket(res.ticket);
+      setStep('success');
+    } catch (err) {
+      console.error('Payment failed', err);
+      setStep('form');
+    }
   };
 
-  const handleAbandon = () => {
-    if (ticket) updateTicket(ticket.id, { status: 'cancelled' });
+  const handleAbandon = async () => {
+    if (ticket) {
+      try {
+        await api.tickets.cancel(ticket.id);
+      } catch (err) {
+        console.error('Failed to cancel ticket', err);
+      }
+    }
     navigate('/patient');
   };
 
@@ -62,13 +79,13 @@ export default function Payment() {
       </div>
 
       {/* Amount card */}
-      <div className="bg-navy dark:bg-card border border-border rounded p-5 flex items-center justify-between">
+      <div className="bg-[#1e293b] text-white border border-border rounded p-5 flex items-center justify-between shadow">
         <div>
-          <p className="text-xs text-white/60 dark:text-muted-foreground uppercase tracking-wide font-semibold">{lang === 'fr' ? service.nameFr : service.nameEn}</p>
-          <p className="text-sm text-white/70 dark:text-muted-foreground mt-0.5">{t('paymentAmount')}</p>
+          <p className="text-xs text-white/60 uppercase tracking-wide font-semibold">{lang === 'fr' ? service.nameFr : service.nameEn}</p>
+          <p className="text-sm text-white/80 mt-0.5">{t('paymentAmount')}</p>
         </div>
         <div className="text-right">
-          <p className="text-3xl font-mono font-bold text-white dark:text-foreground">{service.bookingFee.toLocaleString()}</p>
+          <p className="text-3xl font-mono font-bold text-white">{service.bookingFee.toLocaleString()}</p>
           <p className="text-sm text-teal font-semibold">{t('XOF')}</p>
         </div>
       </div>
@@ -79,9 +96,9 @@ export default function Payment() {
           <div className="grid grid-cols-2 gap-3">
             {(['mtn', 'orange'] as const).map(p => (
               <button key={p} onClick={() => { setProvider(p); setStep('form'); }}
-                className={`p-5 border-2 rounded flex flex-col items-center gap-3 hover:border-primary/50 transition-all ${provider === p ? 'border-primary' : 'border-border'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg ${p === 'mtn' ? 'bg-yellow-500' : 'bg-orange-500'}`}>
-                  {p === 'mtn' ? 'M' : 'O'}
+                className={`p-5 border-2 rounded-xl flex flex-col items-center gap-3 hover:border-primary/50 transition-all ${provider === p ? 'border-primary' : 'border-border'}`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow ${p === 'mtn' ? 'bg-yellow-500' : 'bg-orange-500'}`}>
+                  {p === 'mtn' ? 'MTN' : 'OM'}
                 </div>
                 <span className="text-sm font-semibold text-center leading-tight">
                   {p === 'mtn' ? t('paymentMTN') : t('paymentOrange')}
@@ -108,7 +125,7 @@ export default function Payment() {
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{t('paymentPhone')}</label>
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
-              placeholder={provider === 'mtn' ? '+224 6XX XXX XXX' : '+224 5XX XXX XXX'}
+              placeholder={provider === 'mtn' ? '6XX XXX XXX' : '5XX XXX XXX'}
               className="w-full px-3 py-2.5 bg-card border border-border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring" />
           </div>
 
@@ -119,7 +136,7 @@ export default function Payment() {
           </div>
 
           <button type="submit"
-            className="w-full py-3 font-semibold text-sm rounded text-white transition-opacity hover:opacity-90"
+            className="w-full py-3 font-semibold text-sm rounded-xl text-white shadow transition-opacity hover:opacity-90"
             style={{ background: provider === 'mtn' ? '#EAB308' : '#F97316' }}>
             {provider === 'mtn' ? t('payWithMTN') : t('payWithOrange')}
           </button>
@@ -133,7 +150,7 @@ export default function Payment() {
         <div className="text-center py-12 space-y-4">
           <div className="mx-auto w-14 h-14 rounded-full border-4 border-primary border-t-transparent animate-spin" />
           <p className="text-sm font-medium">{t('paymentProcessing')}</p>
-          <p className="text-xs text-muted-foreground">{lang === 'fr' ? 'Veuillez patienter...' : 'Please wait...'}</p>
+          <p className="text-xs text-muted-foreground">{lang === 'fr' ? 'Validation avec l\'opérateur en cours...' : 'Processing operator payment...'}</p>
         </div>
       )}
 
@@ -147,7 +164,7 @@ export default function Payment() {
             <p className="text-sm text-muted-foreground mt-1">{t('paymentSuccessMsg')}</p>
           </div>
 
-          <div className="bg-card border-2 border-primary/30 rounded p-5 space-y-3">
+          <div className="bg-card border-2 border-primary/30 rounded-xl p-5 space-y-3 shadow-sm">
             <div className="text-center">
               <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">{t('ticketNumber')}</p>
               <p className="text-4xl font-mono font-bold text-primary mt-1">{confirmedTicket.number}</p>
@@ -159,13 +176,13 @@ export default function Payment() {
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">{t('paymentRef')}</p>
-                <p className="font-mono text-xs">{confirmedTicket.paymentRef}</p>
+                <p className="font-mono text-xs text-primary">{confirmedTicket.paymentRef}</p>
               </div>
             </div>
           </div>
 
           <button onClick={() => navigate('/patient/queue')}
-            className="w-full py-3 bg-primary text-primary-foreground font-semibold text-sm rounded hover:opacity-90 transition-opacity">
+            className="w-full py-3 bg-primary text-primary-foreground font-semibold text-sm rounded-xl hover:opacity-90 transition-opacity shadow">
             {t('viewMyQueue')}
           </button>
         </div>

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth, useLang } from '../lib/store';
-import { getUserNotifications, markNotificationRead, markAllRead, type Notification } from '../lib/db';
+import { api, subscribeWS } from '../lib/api';
+import type { Notification } from '../lib/db';
 
 export default function NotificationBell() {
   const { user } = useAuth();
@@ -9,12 +10,29 @@ export default function NotificationBell() {
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
-  const reload = () => { if (user) setNotifs(getUserNotifications(user.id)); };
-
-  useEffect(() => { reload(); const id = setInterval(reload, 5000); return () => clearInterval(id); }, [user]);
+  const reload = useCallback(() => {
+    if (user) {
+      api.notifications.getAll()
+        .then(setNotifs)
+        .catch(err => console.error('Failed to load notifications', err));
+    }
+  }, [user]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    reload();
+    // Subscribe to real-time WebSocket notifications
+    const unsubscribe = subscribeWS((msg) => {
+      if (msg.type === 'NOTIFICATION_CREATED' || msg.type === 'TICKET_CALLED' || msg.type === 'PAYMENT_CONFIRMED') {
+        reload();
+      }
+    });
+    return () => unsubscribe();
+  }, [reload]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -22,8 +40,16 @@ export default function NotificationBell() {
   const unread = notifs.filter(n => !n.read).length;
 
   const handleOpen = () => { setOpen(v => !v); };
-  const handleRead = (id: string) => { markNotificationRead(id); reload(); };
-  const handleReadAll = () => { if (user) { markAllRead(user.id); reload(); } };
+  const handleRead = async (id: string) => {
+    await api.notifications.markRead(id);
+    reload();
+  };
+  const handleReadAll = async () => {
+    if (user) {
+      await api.notifications.markAllRead();
+      reload();
+    }
+  };
 
   const msg = (n: Notification) => lang === 'fr' ? n.messageFr : n.messageEn;
 

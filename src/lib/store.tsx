@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { User } from './db';
-import { createUser, getUserByEmail, getUserById, getUsers, logActivity, updateUser, initDB } from './db';
+import { api, getToken } from './api';
 import type { Lang } from './i18n';
 import { translations } from './i18n';
 
@@ -39,7 +39,8 @@ export function LangProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const t = useCallback((key: keyof typeof translations.fr): string => {
-    return (translations[lang] as Record<string, string>)[key] ?? key;
+    const val = (translations[lang] as unknown as Record<string, string>)[key];
+    return val ?? key;
   }, [lang]);
 
   return <LangContext.Provider value={{ lang, setLang, t }}>{children}</LangContext.Provider>;
@@ -50,54 +51,93 @@ export function useLang() { return useContext(LangContext); }
 // Auth
 interface AuthCtx {
   user: User | null;
-  login: (email: string, password: string) => { success: boolean; error?: string };
-  registerFirstAdmin: (name: string, email: string, password: string) => { success: boolean; error?: string };
-  logout: () => void;
-  refreshUser: () => void;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  registerFirstAdmin: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
-const AuthContext = createContext<AuthCtx>({ user: null, login: () => ({ success: false }), registerFirstAdmin: () => ({ success: false }), logout: () => {}, refreshUser: () => {} });
+
+const AuthContext = createContext<AuthCtx>({
+  user: null,
+  loading: true,
+  login: async () => ({ success: false }),
+  registerFirstAdmin: async () => ({ success: false }),
+  logout: async () => {},
+  refreshUser: async () => {}
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     try { return JSON.parse(sessionStorage.getItem('hq_session') || 'null'); } catch { return null; }
   });
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { initDB(); }, []);
-
-  const login = useCallback((email: string, password: string): { success: boolean; error?: string } => {
-    const found = getUserByEmail(email);
-    if (!found || found.password !== password) return { success: false, error: 'loginError' };
-    if (found.suspended) return { success: false, error: 'suspendedError' };
-    const updated = updateUser(found.id, { lastLogin: new Date().toISOString() }) || found;
-    sessionStorage.setItem('hq_session', JSON.stringify(updated));
-    setUser(updated);
-    logActivity(found.id, found.name, 'Connexion / Login');
-    return { success: true };
+  // Rehydrate user from backend if token exists
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      api.auth.getMe()
+        .then(res => {
+          setUser(res.user);
+          sessionStorage.setItem('hq_session', JSON.stringify(res.user));
+        })
+        .catch(() => {
+          setUser(null);
+          sessionStorage.removeItem('hq_session');
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, []);
 
-  const registerFirstAdmin = useCallback((name: string, email: string, password: string): { success: boolean; error?: string } => {
-    if (getUsers().some(existing => existing.role === 'admin')) return { success: false, error: 'registrationClosed' };
-    if (getUserByEmail(email)) return { success: false, error: 'emailAlreadyUsed' };
-    const { user: created } = createUser({ name, email, password, role: 'admin', createdBy: 'system' });
-    sessionStorage.setItem('hq_session', JSON.stringify(created));
-    setUser(created);
-    logActivity(created.id, created.name, 'Création du premier administrateur / First administrator created');
-    return { success: true };
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await api.auth.login(email, password);
+      sessionStorage.setItem('hq_session', JSON.stringify(res.user));
+      setUser(res.user);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.code || 'loginError' };
+    }
   }, []);
 
-  const logout = useCallback(() => {
-    if (user) logActivity(user.id, user.name, 'Déconnexion / Logout');
-    sessionStorage.removeItem('hq_session');
-    setUser(null);
-  }, [user]);
+  const registerFirstAdmin = useCallback(async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await api.auth.registerFirstAdmin(name, email, password);
+      sessionStorage.setItem('hq_session', JSON.stringify(res.user));
+      setUser(res.user);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.code || 'registrationClosed' };
+    }
+  }, []);
 
-  const refreshUser = useCallback(() => {
-    if (!user) return;
-    const fresh = getUserById(user.id);
-    if (fresh) { sessionStorage.setItem('hq_session', JSON.stringify(fresh)); setUser(fresh); }
-  }, [user]);
+  const logout = useCallback(async () => {
+    try {
+      await api.auth.logout();
+    } finally {
+      sessionStorage.removeItem('hq_session');
+      setUser(null);
+    }
+  }, []);
 
-  return <AuthContext.Provider value={{ user, login, registerFirstAdmin, logout, refreshUser }}>{children}</AuthContext.Provider>;
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.auth.getMe();
+      sessionStorage.setItem('hq_session', JSON.stringify(res.user));
+      setUser(res.user);
+    } catch (err) {
+      console.error('Failed to refresh user', err);
+    }
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, registerFirstAdmin, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() { return useContext(AuthContext); }

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "backend": "npm --prefix backend run dev",
+    "backend:start": "npm --prefix backend run start",
+    "build": "vite build && npm --prefix backend run build",
     "preview": "vite preview",
     "format": "oxfmt"
   },

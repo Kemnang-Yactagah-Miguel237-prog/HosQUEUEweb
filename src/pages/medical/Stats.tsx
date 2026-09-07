@@ -1,20 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLang, useAuth } from '../../lib/store';
-import { getTodayTickets, getServiceById, type Ticket } from '../../lib/db';
+import { api, subscribeWS } from '../../lib/api';
+import type { Ticket, Service } from '../../lib/db';
 
 export default function Stats() {
   const { user } = useAuth();
   const { t, lang } = useLang();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [service, setService] = useState<Service | null>(null);
 
   const serviceId = user?.serviceId;
-  const service = serviceId ? getServiceById(serviceId) : null;
+
+  const loadData = useCallback(async () => {
+    if (!serviceId) return;
+    try {
+      const [svc, allTickets] = await Promise.all([
+        api.services.getById(serviceId),
+        api.tickets.getAll({ serviceId, today: true })
+      ]);
+      setService(svc);
+      setTickets(allTickets);
+    } catch (err) {
+      console.error('Failed to load stats', err);
+    }
+  }, [serviceId]);
 
   useEffect(() => {
-    if (!serviceId) return;
-    const tk = getTodayTickets(serviceId);
-    setTickets(tk);
-  }, [serviceId]);
+    loadData();
+    const unsubscribe = subscribeWS((msg) => {
+      if (['TICKET_CALLED', 'TICKET_SERVED', 'TICKET_SKIPPED', 'QUEUE_UPDATED'].includes(msg.type)) {
+        loadData();
+      }
+    });
+    return () => unsubscribe();
+  }, [loadData]);
 
   const served = tickets.filter(t => t.status === 'served');
   const skipped = tickets.filter(t => t.status === 'skipped');
@@ -40,7 +59,7 @@ export default function Stats() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-serif">{t('statsTitle')}</h1>
+        <h1 className="text-2xl font-serif font-bold">{t('statsTitle')}</h1>
         {service && <p className="text-sm text-muted-foreground mt-0.5">{lang === 'fr' ? service.nameFr : service.nameEn} · {new Date().toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</p>}
       </div>
 
@@ -51,7 +70,7 @@ export default function Stats() {
           { label: t('skippedToday'), value: skipped.length, color: 'text-amber-600' },
           { label: t('avgWaitTime'), value: `${avgWait}`, suffix: ' min', color: 'text-primary' },
         ].map((s, i) => (
-          <div key={i} className="bg-card border border-border rounded p-4">
+          <div key={i} className="bg-card border border-border rounded-xl p-4 shadow-xs">
             <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold leading-tight">{s.label}</p>
             <p className={`text-3xl font-mono font-bold mt-1 ${s.color}`}>{s.value}<span className="text-sm text-muted-foreground font-normal">{s.suffix}</span></p>
           </div>
@@ -60,7 +79,7 @@ export default function Stats() {
 
       {/* Served/skipped ratio */}
       {total > 0 && (
-        <div className="bg-card border border-border rounded p-5 space-y-3">
+        <div className="bg-card border border-border rounded-2xl p-5 space-y-3 shadow-xs">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{lang === 'fr' ? 'Taux de service' : 'Service rate'}</h2>
           <div className="flex items-center gap-3">
             <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
@@ -76,7 +95,7 @@ export default function Stats() {
       )}
 
       {/* Hourly chart */}
-      <div className="bg-card border border-border rounded p-5 space-y-4">
+      <div className="bg-card border border-border rounded-2xl p-5 space-y-4 shadow-xs">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{lang === 'fr' ? 'Activité par heure' : 'Hourly activity'}</h2>
         <div className="flex items-end gap-1.5 h-24">
           {hours.map(h => {

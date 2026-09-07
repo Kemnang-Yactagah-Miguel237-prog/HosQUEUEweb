@@ -1,13 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useLang, useAuth } from '../../lib/store';
-import { getTicketsByPatient, getServiceById, getQueuePosition, getEstimatedWait, updateTicket, type Ticket } from '../../lib/db';
+import { api, subscribeWS } from '../../lib/api';
+import type { Ticket, Service } from '../../lib/db';
 
-function TicketCard({ ticket, onCancel }: { ticket: Ticket; onCancel: () => void }) {
+function TicketCard({
+  ticket,
+  service,
+  position,
+  onCancel
+}: {
+  ticket: Ticket;
+  service?: Service;
+  position: number | null;
+  onCancel: () => void;
+}) {
   const { t, lang } = useLang();
-  const service = getServiceById(ticket.serviceId);
-  const position = ticket.status === 'waiting' ? getQueuePosition(ticket.id) : null;
-  const wait = position ? getEstimatedWait(position) : null;
+  const wait = position ? Math.max(0, position * 10) : null;
   const serviceName = service ? (lang === 'fr' ? service.nameFr : service.nameEn) : '';
 
   const isYourTurn = ticket.status === 'called';
@@ -46,11 +55,11 @@ function TicketCard({ ticket, onCancel }: { ticket: Ticket; onCancel: () => void
   };
 
   return (
-    <div className={`bg-card border rounded overflow-hidden ${isYourTurn ? 'border-emerald-400 dark:border-emerald-600 shadow-md' : 'border-border'}`}>
+    <div className={`bg-card border rounded-2xl overflow-hidden transition-all shadow-sm ${isYourTurn ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-border'}`}>
       {isYourTurn && (
-        <div className="bg-emerald-500 px-4 py-2 flex items-center gap-2 text-white">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span className="font-semibold text-sm">{t('yourTurn')} {t('yourTurnMsg')}</span>
+        <div className="bg-emerald-600 px-4 py-2.5 flex items-center gap-2 text-white animate-pulse">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span className="font-semibold text-sm">{t('yourTurn')} - {t('yourTurnMsg')}</span>
         </div>
       )}
 
@@ -67,12 +76,12 @@ function TicketCard({ ticket, onCancel }: { ticket: Ticket; onCancel: () => void
 
         {ticket.status === 'waiting' && position !== null && (
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="bg-muted rounded p-3 text-center">
+            <div className="bg-muted rounded-xl p-3 text-center">
               <p className="text-xs text-muted-foreground">{t('position')}</p>
               <p className="text-2xl font-mono font-bold text-foreground">{position}</p>
               <p className="text-[10px] text-muted-foreground">{t('peopleAhead')}</p>
             </div>
-            <div className="bg-muted rounded p-3 text-center">
+            <div className="bg-muted rounded-xl p-3 text-center">
               <p className="text-xs text-muted-foreground">{t('waitTime')}</p>
               <p className="text-2xl font-mono font-bold text-primary">{wait}</p>
               <p className="text-[10px] text-muted-foreground">{t('minutes')}</p>
@@ -83,13 +92,13 @@ function TicketCard({ ticket, onCancel }: { ticket: Ticket; onCancel: () => void
         {isActive && (
           <div className="mt-4 flex gap-2">
             <button onClick={handlePrint}
-              className="flex-1 py-2 text-xs font-semibold border border-border rounded hover:bg-muted transition-colors flex items-center justify-center gap-1.5">
+              className="flex-1 py-2.5 text-xs font-semibold border border-border rounded-xl hover:bg-muted transition-colors flex items-center justify-center gap-1.5">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               {t('downloadTicket')}
             </button>
             {ticket.status === 'waiting' && (
               <button onClick={onCancel}
-                className="px-4 py-2 text-xs font-semibold border border-red-200 text-red-600 dark:border-red-900 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950 transition-colors">
+                className="px-4 py-2.5 text-xs font-semibold border border-red-200 text-red-600 dark:border-red-900 dark:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-950 transition-colors">
                 {t('cancelTicket')}
               </button>
             )}
@@ -98,7 +107,7 @@ function TicketCard({ ticket, onCancel }: { ticket: Ticket; onCancel: () => void
 
         <p className="text-[10px] text-muted-foreground font-mono mt-3">
           {new Date(ticket.createdAt).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-          {ticket.paymentRef && ` · ${ticket.paymentRef}`}
+          {ticket.paymentRef && ` · Ref: ${ticket.paymentRef}`}
         </p>
       </div>
     </div>
@@ -110,22 +119,58 @@ export default function MyQueue() {
   const { t, lang } = useLang();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [services, setServices] = useState<Record<string, Service>>({});
+  const [positions, setPositions] = useState<Record<string, number>>({});
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const load = () => {
+  const loadData = useCallback(async () => {
     if (!user) return;
-    const tk = getTicketsByPatient(user.id)
-      .filter(t => t.status !== 'cancelled')
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    setTickets(tk);
-  };
+    try {
+      const [allTickets, allServices] = await Promise.all([
+        api.tickets.getAll({ patientId: user.id }),
+        api.services.getAll()
+      ]);
 
-  useEffect(() => { load(); const id = setInterval(load, 8000); return () => clearInterval(id); }, [user]);
+      const svcMap: Record<string, Service> = {};
+      allServices.forEach(s => { svcMap[s.id] = s; });
+      setServices(svcMap);
 
-  const handleCancel = (id: string) => {
-    updateTicket(id, { status: 'cancelled' });
-    setConfirmId(null);
-    load();
+      const sorted = allTickets
+        .filter(t => t.status !== 'cancelled')
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      setTickets(sorted);
+
+      // Fetch positions
+      for (const tk of sorted) {
+        if (tk.status === 'waiting') {
+          api.tickets.getPosition(tk.id)
+            .then(res => setPositions(prev => ({ ...prev, [tk.id]: res.position })))
+            .catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load my queue data', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadData();
+    const unsubscribe = subscribeWS((msg) => {
+      if (['TICKET_CREATED', 'TICKET_CALLED', 'TICKET_SERVED', 'TICKET_SKIPPED', 'PAYMENT_CONFIRMED', 'QUEUE_UPDATED'].includes(msg.type)) {
+        loadData();
+      }
+    });
+    return () => unsubscribe();
+  }, [loadData]);
+
+  const handleCancel = async (id: string) => {
+    try {
+      await api.tickets.cancel(id);
+      setConfirmId(null);
+      loadData();
+    } catch (err) {
+      console.error('Failed to cancel ticket', err);
+    }
   };
 
   const active = tickets.filter(t => t.status === 'waiting' || t.status === 'called');
@@ -133,14 +178,14 @@ export default function MyQueue() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <h1 className="text-2xl font-serif">{t('myQueue')}</h1>
+      <h1 className="text-2xl font-serif font-bold">{t('myQueue')}</h1>
 
       {active.length === 0 && history.length === 0 && (
-        <div className="text-center py-16 space-y-3 text-muted-foreground">
+        <div className="text-center py-16 space-y-3 text-muted-foreground bg-card border border-border rounded-2xl p-8">
           <svg className="mx-auto opacity-30" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
-          <p className="text-sm font-medium">{t('noActiveTicket')}</p>
+          <p className="text-sm font-medium text-foreground">{t('noActiveTicket')}</p>
           <p className="text-xs">{t('bookToJoin')}</p>
-          <button onClick={() => navigate('/patient')} className="mt-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded hover:opacity-90 transition-opacity">
+          <button onClick={() => navigate('/patient')} className="mt-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow">
             {t('services')}
           </button>
         </div>
@@ -150,7 +195,13 @@ export default function MyQueue() {
         <div className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{lang === 'fr' ? 'Tickets actifs' : 'Active tickets'}</h2>
           {active.map(tk => (
-            <TicketCard key={tk.id} ticket={tk} onCancel={() => setConfirmId(tk.id)} />
+            <TicketCard
+              key={tk.id}
+              ticket={tk}
+              service={services[tk.serviceId]}
+              position={positions[tk.id] ?? null}
+              onCancel={() => setConfirmId(tk.id)}
+            />
           ))}
         </div>
       )}
@@ -159,20 +210,26 @@ export default function MyQueue() {
         <div className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{lang === 'fr' ? 'Historique' : 'History'}</h2>
           {history.slice(0, 5).map(tk => (
-            <TicketCard key={tk.id} ticket={tk} onCancel={() => {}} />
+            <TicketCard
+              key={tk.id}
+              ticket={tk}
+              service={services[tk.serviceId]}
+              position={null}
+              onCancel={() => {}}
+            />
           ))}
         </div>
       )}
 
       {/* Cancel confirm dialog */}
       {confirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded p-6 max-w-sm w-full space-y-4">
-            <h3 className="font-semibold">{t('cancelConfirm')}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-xl">
+            <h3 className="font-semibold text-foreground text-lg">{t('cancelConfirm')}</h3>
             <p className="text-sm text-muted-foreground">{t('deleteWarning')}</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmId(null)} className="flex-1 py-2 border border-border rounded text-sm hover:bg-muted transition-colors">{t('no')}</button>
-              <button onClick={() => handleCancel(confirmId)} className="flex-1 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700 transition-colors">{t('yes')}</button>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setConfirmId(null)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-muted transition-colors">{t('no')}</button>
+              <button onClick={() => handleCancel(confirmId)} className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors">{t('yes')}</button>
             </div>
           </div>
         </div>
