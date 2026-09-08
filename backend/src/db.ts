@@ -1,7 +1,9 @@
+import bcrypt from 'bcryptjs';
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
+import mysql from 'mysql2/promise';
 import { fileURLToPath } from 'url';
-import bcrypt from 'bcryptjs';
 import type { User, Service, Ticket, Notification, ActivityEntry, PaymentTransaction, Role, TicketStatus, NotifType, PaymentStatus } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,6 +11,17 @@ const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.resolve(__dirname, '../data');
 const DB_FILE = path.join(DATA_DIR, 'hosqueue_db.json');
+
+const MYSQL_CONFIG = {
+  host: process.env.MYSQL_HOST || '127.0.0.1',
+  port: Number(process.env.MYSQL_PORT || 3306),
+  user: process.env.MYSQL_USER || 'root',
+  password: process.env.MYSQL_PASSWORD || '',
+  database: process.env.MYSQL_DATABASE || 'hosqueue',
+  waitForConnections: true,
+  connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10),
+  multipleStatements: true
+};
 
 interface DatabaseSchema {
   users: User[];
@@ -21,6 +34,7 @@ interface DatabaseSchema {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const ts = () => new Date().toISOString();
+const mysqlDate = (value?: string) => value ? new Date(value).toISOString().slice(0, 23).replace('T', ' ') : null;
 
 const SEED_USERS: User[] = [
   { id: 'u-admin', name: 'Admin Principal', email: 'admin@hosqueue.com', password: '', role: 'admin', suspended: false, createdAt: '2025-01-01T08:00:00Z', createdBy: 'system' },
@@ -64,11 +78,99 @@ class Database {
     payments: []
   };
 
+  private pool = mysql.createPool(MYSQL_CONFIG);
+  private persistQueue: Promise<void> = Promise.resolve();
+  public readonly ready: Promise<void>;
+
   constructor() {
-    this.init();
+    this.ready = this.init();
   }
 
-  private init() {
+  private async init(): Promise<void> {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS hosqueue_state (
+        id TINYINT UNSIGNED PRIMARY KEY,
+        data JSON NOT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(32) PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(20) NOT NULL,
+        service_id VARCHAR(32) NULL,
+        suspended BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at DATETIME(3) NOT NULL,
+        created_by VARCHAR(32) NULL,
+        last_login DATETIME(3) NULL
+      );
+      CREATE TABLE IF NOT EXISTS services (
+        id VARCHAR(32) PRIMARY KEY,
+        name_fr VARCHAR(150) NOT NULL,
+        name_en VARCHAR(150) NOT NULL,
+        capacity INT NOT NULL,
+        booking_fee INT NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        next_number INT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS tickets (
+        id VARCHAR(32) PRIMARY KEY,
+        number VARCHAR(32) NOT NULL,
+        patient_id VARCHAR(32) NOT NULL,
+        patient_name VARCHAR(150) NOT NULL,
+        service_id VARCHAR(32) NOT NULL,
+        status VARCHAR(32) NOT NULL,
+        created_at DATETIME(3) NOT NULL,
+        called_at DATETIME(3) NULL,
+        served_at DATETIME(3) NULL,
+        payment_ref VARCHAR(100) NULL
+      );
+      CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR(32) PRIMARY KEY,
+        user_id VARCHAR(32) NOT NULL,
+        message_fr TEXT NOT NULL,
+        message_en TEXT NOT NULL,
+        is_read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at DATETIME(3) NOT NULL,
+        type VARCHAR(32) NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS activities (
+        id VARCHAR(32) PRIMARY KEY,
+        user_id VARCHAR(32) NOT NULL,
+        user_name VARCHAR(150) NOT NULL,
+        action TEXT NOT NULL,
+        target_id VARCHAR(32) NULL,
+        created_at DATETIME(3) NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS payments (
+        id VARCHAR(32) PRIMARY KEY,
+        ticket_id VARCHAR(32) NOT NULL,
+        patient_id VARCHAR(32) NOT NULL,
+        service_id VARCHAR(32) NOT NULL,
+        amount INT NOT NULL,
+        phone_number VARCHAR(32) NOT NULL,
+        provider VARCHAR(32) NOT NULL,
+        reference VARCHAR(100) NOT NULL,
+        status VARCHAR(32) NOT NULL,
+        created_at DATETIME(3) NOT NULL
+      )
+    `);
+
+    const [rows] = await this.pool.query<mysql.RowDataPacket[]>(
+      'SELECT data FROM hosqueue_state WHERE id = 1'
+    );
+
+    if (rows.length > 0) {
+      const storedData = rows[0].data;
+      this.data = typeof storedData === 'string' ? JSON.parse(storedData) : storedData;
+      this.ensureCollections();
+      await this.persist();
+      return;
+    }
+
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
@@ -77,23 +179,27 @@ class Database {
       try {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         this.data = JSON.parse(raw);
-        // Ensure all arrays exist
-        this.data.users = this.data.users || [];
-        this.data.services = this.data.services || [];
-        this.data.tickets = this.data.tickets || [];
-        this.data.notifications = this.data.notifications || [];
-        this.data.activities = this.data.activities || [];
-        this.data.payments = this.data.payments || [];
+        this.ensureCollections();
+        await this.persist();
         return;
       } catch (err) {
         console.error('Error reading db file, seeding fresh database...', err);
       }
     }
 
-    this.seed();
+    await this.seed();
   }
 
-  private seed() {
+  private ensureCollections() {
+    this.data.users = this.data.users || [];
+    this.data.services = this.data.services || [];
+    this.data.tickets = this.data.tickets || [];
+    this.data.notifications = this.data.notifications || [];
+    this.data.activities = this.data.activities || [];
+    this.data.payments = this.data.payments || [];
+  }
+
+  private async seed(): Promise<void> {
     const salt = bcrypt.genSaltSync(10);
     const adminPwd = bcrypt.hashSync('Admin@123', salt);
     const staffPwd = bcrypt.hashSync('Staff@123', salt);
@@ -133,15 +239,73 @@ class Database {
       payments: []
     };
 
-    this.persist();
+    await this.persist();
   }
 
-  public persist() {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Failed to write database file:', err);
-    }
+  public persist(): Promise<void> {
+    this.persistQueue = this.persistQueue.then(async () => {
+      const connection = await this.pool.getConnection();
+      try {
+        await connection.beginTransaction();
+        await connection.execute(
+          `INSERT INTO hosqueue_state (id, data) VALUES (1, ?)
+           ON DUPLICATE KEY UPDATE data = VALUES(data)`,
+          [JSON.stringify(this.data)]
+        );
+        await connection.query('DELETE FROM users');
+        await connection.query('DELETE FROM services');
+        await connection.query('DELETE FROM tickets');
+        await connection.query('DELETE FROM notifications');
+        await connection.query('DELETE FROM activities');
+        await connection.query('DELETE FROM payments');
+
+        for (const user of this.data.users) {
+          await connection.execute(
+            'INSERT INTO users (id, name, email, password, role, service_id, suspended, created_at, created_by, last_login) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [user.id, user.name, user.email, user.password, user.role, user.serviceId ?? null, user.suspended, mysqlDate(user.createdAt), user.createdBy ?? null, mysqlDate(user.lastLogin)]
+          );
+        }
+        for (const service of this.data.services) {
+          await connection.execute(
+            'INSERT INTO services (id, name_fr, name_en, capacity, booking_fee, active, next_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [service.id, service.nameFr, service.nameEn, service.capacity, service.bookingFee, service.active, service.nextNumber]
+          );
+        }
+        for (const ticket of this.data.tickets) {
+          await connection.execute(
+            'INSERT INTO tickets (id, number, patient_id, patient_name, service_id, status, created_at, called_at, served_at, payment_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [ticket.id, ticket.number, ticket.patientId, ticket.patientName, ticket.serviceId, ticket.status, mysqlDate(ticket.createdAt), mysqlDate(ticket.calledAt), mysqlDate(ticket.servedAt), ticket.paymentRef ?? null]
+          );
+        }
+        for (const notification of this.data.notifications) {
+          await connection.execute(
+            'INSERT INTO notifications (id, user_id, message_fr, message_en, is_read, created_at, type) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [notification.id, notification.userId, notification.messageFr, notification.messageEn, notification.read, mysqlDate(notification.createdAt), notification.type]
+          );
+        }
+        for (const activity of this.data.activities) {
+          await connection.execute(
+            'INSERT INTO activities (id, user_id, user_name, action, target_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [activity.id, activity.userId, activity.userName, activity.action, activity.targetId ?? null, mysqlDate(activity.createdAt)]
+          );
+        }
+        for (const payment of this.data.payments) {
+          await connection.execute(
+            'INSERT INTO payments (id, ticket_id, patient_id, service_id, amount, phone_number, provider, reference, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [payment.id, payment.ticketId, payment.patientId, payment.serviceId, payment.amount, payment.phoneNumber, payment.provider, payment.reference, payment.status, mysqlDate(payment.createdAt)]
+          );
+        }
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    }).catch(error => {
+      console.error('Failed to write MySQL database:', error);
+    });
+    return this.persistQueue;
   }
 
   // --- USERS ---
@@ -174,7 +338,7 @@ class Database {
     };
 
     this.data.users.push(user);
-    this.persist();
+    void this.persist();
     return { user, rawPassword };
   }
 

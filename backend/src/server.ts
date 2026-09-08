@@ -11,6 +11,7 @@ import { usersRouter } from './routes/users.routes.js';
 import { notificationsRouter } from './routes/notifications.routes.js';
 import { activitiesRouter } from './routes/activities.routes.js';
 import { statsRouter } from './routes/stats.routes.js';
+import { db } from './db.js';
 
 dotenv.config();
 
@@ -57,7 +58,12 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 // Start Server
-server.listen(PORT, () => {
-  console.log(`🚀 HosQUEUE Backend running on http://localhost:${PORT}`);
-  console.log(`📡 WebSocket endpoint available at ws://localhost:${PORT}/ws`);
+void db.ready.then(() => {
+  server.listen(PORT, () => {
+    console.log(`🚀 HosQUEUE Backend running on http://localhost:${PORT}`);
+    console.log(`📡 WebSocket endpoint available at ws://localhost:${PORT}/ws`);
+  });
+}).catch((error: unknown) => {
+  console.error('Failed to initialize MySQL database:', error);
+  process.exitCode = 1;
 });
